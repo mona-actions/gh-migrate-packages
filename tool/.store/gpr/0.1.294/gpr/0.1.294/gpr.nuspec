@@ -1,0 +1,18 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>gpr</id>
+    <version>0.1.294</version>
+    <title>GPR Tool</title>
+    <authors>Jamie Cansdale</authors>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <license type="expression">Apache-2.0</license>
+    <licenseUrl>https://licenses.nuget.org/Apache-2.0</licenseUrl>
+    <description>A .NET Core tool for working the GitHub Package Registry.</description>
+    <copyright>Mutant Design Limited</copyright>
+    <packageTypes>
+      <packageType name="DotnetTool" />
+    </packageTypes>
+    <repository url="https://github.com/jcansdale/gpr" />
+  </metadata>
+</package>
