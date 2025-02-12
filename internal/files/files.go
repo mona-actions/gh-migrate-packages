@@ -89,3 +89,7 @@ func ReadCSV(filename string) ([][]string, error) {
 
 	return data, nil
 }
+
+func EnsureDir(dir string) error {
+	return os.MkdirAll(dir, 0755)
+}

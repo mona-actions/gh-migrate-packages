@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var SUPPORTED_PACKAGE_TYPES = []string{"maven", "npm"}
+var SUPPORTED_PACKAGE_TYPES = []string{"container", "rubygems", "maven", "npm", "nuget"}
 
 func Download(logger *zap.Logger, provider providers.Provider, report *common.Report, repository, packageType, packageName, version string, filenames []string) error {
 	owner := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
@@ -77,35 +77,53 @@ func Download(logger *zap.Logger, provider providers.Provider, report *common.Re
 
 func Pull(logger *zap.Logger) error {
 	owner := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
-	desiredPackageType := viper.GetString("GHMPKG_PACKAGE_TYPE")
-	prefix := owner
-	if desiredPackageType != "" {
-		prefix = fmt.Sprintf("%s-%s", owner, desiredPackageType)
-	}
-	exportFilename := fmt.Sprintf("./export/%s-packages.csv", prefix)
+	desiredPackageType := viper.GetString("GHMPKG_PACKAGE_TYPES")
 	spinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Downloading packages from source org: %s", owner))
-	println(exportFilename)
 
-	// check if exportFilename exists
-	
-	if !utils.FileExists(exportFilename) {
-		spinner.Fail(common.ARE_YOU_SURE_YOU_EXPORTED)
-		return fmt.Errorf(common.ARE_YOU_SURE_YOU_EXPORTED)
+	// Handle either specific package type or all package types
+	packageTypes := SUPPORTED_PACKAGE_TYPES
+	if desiredPackageType != "" {
+		if !utils.Contains(SUPPORTED_PACKAGE_TYPES, desiredPackageType) {
+			spinner.Fail(fmt.Sprintf("Unsupported package type: %s", desiredPackageType))
+			return fmt.Errorf("unsupported package type: %s", desiredPackageType)
+		}
+		packageTypes = []string{desiredPackageType}
 	}
 
-	packages, err := files.ReadCSV(exportFilename)
-	if err != nil {
-		spinner.Fail(fmt.Sprintf("Error reading CSV file: %v", err))
-		return err
+	var allPackages [][]string
+	for _, pkgType := range packageTypes {
+		println(pkgType)
+		// Look for the most recent CSV file in the package type directory
+		pattern := fmt.Sprintf("./packages-migration/%s/*_%s_%s_packages.csv", pkgType, owner, pkgType)
+		matches, err := utils.FindMostRecentFile(pattern)
+		if err != nil {
+			logger.Warn("No export file found for package type",
+				zap.String("packageType", pkgType),
+				zap.Error(err))
+			continue
+		}
+
+		packages, err := files.ReadCSV(matches)
+		if err != nil {
+			spinner.Fail(fmt.Sprintf("Error reading CSV file for %s: %v", pkgType, err))
+			return err
+		}
+		allPackages = append(allPackages, packages...)
+	}
+
+	if len(allPackages) == 0 {
+		spinner.Fail("No package export files found")
+		return fmt.Errorf("no package export files found")
 	}
 
 	var report *common.Report
-	if report, err = common.ProcessPackages(logger, packages, Download, false); err != nil {
+	var err error
+	if report, err = common.ProcessPackages(logger, allPackages, Download, false); err != nil {
 		spinner.Fail(fmt.Sprintf("Error pulling package: %v", err))
 		return err
 	}
 
-	spinner.Success(fmt.Sprintf("Packages downloaded successfully"))
+	spinner.Success("Packages downloaded successfully")
 	report.Print("Pull")
 	return nil
 }

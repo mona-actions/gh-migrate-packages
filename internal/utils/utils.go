@@ -6,7 +6,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
+	"path/filepath"	
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -306,4 +307,39 @@ func CanMakeRequest() bool {
 func FileExists(path string) bool {
 	_, err := os.Stat(path)
 	return !os.IsNotExist(err)
+}
+
+func Contains(slice []string, item string) bool {
+	for _, s := range slice {
+			if s == item {
+					return true
+			}
+	}
+	return false
+}
+
+func FindMostRecentFile(pattern string) (string, error) {
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+			return "", err
+	}
+	
+	if len(matches) == 0 {
+			return "", fmt.Errorf("no files found matching pattern: %s", pattern)
+	}
+
+	// Sort files by modification time, most recent first
+	sort.Slice(matches, func(i, j int) bool {
+			iInfo, err := os.Stat(matches[i])
+			if err != nil {
+					return false
+			}
+			jInfo, err := os.Stat(matches[j])
+			if err != nil {
+					return false
+			}
+			return iInfo.ModTime().After(jInfo.ModTime())
+	})
+
+	return matches[0], nil
 }
