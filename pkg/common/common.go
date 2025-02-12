@@ -11,18 +11,20 @@ import (
 	"go.uber.org/zap"
 )
 
-const ARE_YOU_SURE_YOU_EXPORTED = "Are you sure you exported first? git gh-migrate-packages export --help"
+const ARE_YOU_SURE_YOU_EXPORTED = "Are you sure you exported first? gh migrate-packages export --help"
 
 type Report struct {
-	PackageSuccess  int
-	VersionSuccess  int
-	FileSuccess     int
-	PackagesSkipped int
-	VersionsSkipped int
-	FilesSkipped    int
-	PackagesFailed  int
-	VersionsFailed  int
-	FilesFailed     int
+	PackageSuccess     int
+	VersionSuccess     int
+	FileSuccess        int
+	PackagesSkipped    int
+	VersionsSkipped    int
+	FilesSkipped       int
+	PackagesFailed     int
+	VersionsFailed     int
+	FilesFailed        int
+	PackagesByType     map[string]int
+	currentPackageType string
 }
 
 func NewReport() *Report {
@@ -36,6 +38,7 @@ func NewReport() *Report {
 		PackagesFailed:  0,
 		VersionsFailed:  0,
 		FilesFailed:     0,
+		PackagesByType:  make(map[string]int),
 	}
 }
 
@@ -59,6 +62,9 @@ func (r *Report) IncPackages(result providers.ResultState) {
 	switch result {
 	case providers.Success:
 		r.PackageSuccess++
+		if packageType := r.currentPackageType; packageType != "" {
+			r.PackagesByType[packageType]++
+		}
 	case providers.Skipped:
 		r.PackagesSkipped++
 	case providers.Failed:
@@ -154,6 +160,8 @@ func ProcessPackages(logger *zap.Logger, packages [][]string, fn ProcessCallback
 			}
 		}
 
+		report.currentPackageType = packageType
+
 		versionFilters := map[string]string{
 			"0": owner,       // org
 			"1": repository,  // repo
@@ -198,4 +206,42 @@ func ProcessPackages(logger *zap.Logger, packages [][]string, fn ProcessCallback
 	}
 
 	return report, nil
+}
+
+func (r *Report) GetPackages(state providers.ResultState) int {
+	switch state {
+	case providers.Success:
+		return r.PackageSuccess
+	case providers.Skipped:
+		return r.PackagesSkipped
+	case providers.Failed:
+		return r.PackagesFailed
+	default:
+		return 0
+	}
+}
+
+func (r *Report) GetPackage(state providers.ResultState) int {
+	switch state {
+	case providers.Success:
+		return r.PackageSuccess
+	case providers.Skipped:
+		return r.PackagesSkipped
+	case providers.Failed:
+		return r.PackagesFailed
+	default:
+		return 0
+	}
+}
+
+func (r *Report) GetTotalSuccess() int {
+	return r.PackageSuccess
+}
+
+func (r *Report) GetSuccessByType(packageType string) int {
+	return r.PackagesByType[packageType]
+}
+
+func (r *Report) GetTotalFailures() int {
+	return r.PackagesFailed
 }

@@ -19,13 +19,17 @@ import (
 var SUPPORTED_PACKAGE_TYPES = []string{"maven", "npm", "container", "rubygems", "nuget"}
 
 func Export(logger *zap.Logger) error {
+	startTime := time.Now()
 	report := common.NewReport()
+	packageStats := make(map[string]int)
+	totalPackages := 0
+	reposWithPackages := make(map[string]bool)
 	owner := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
 	desiredPackageTypes := viper.GetStringSlice("GHMPKG_PACKAGE_TYPES")
 	spinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Exporting packages from source org: %s", owner))
 
 	// Create base export directory
-	baseDir := "./packages-migration"
+	baseDir := "./migration-packages/packages"
 	if err := files.EnsureDir(baseDir); err != nil {
 		spinner.Fail(fmt.Sprintf("Error creating base directory: %v", err))
 		return err
@@ -75,8 +79,12 @@ func Export(logger *zap.Logger) error {
 			return err
 		}
 
+		packageStats[packageType] = len(packages)
+		totalPackages += len(packages)
+
 		// Process packages and add to packagesCSV
 		for _, pkg := range packages {
+			reposWithPackages[pkg.Repository.GetName()] = true
 			// ... existing version processing code ...
 			versions, err := api.FetchPackageVersions(pkg)
 			if err != nil {
@@ -118,6 +126,32 @@ func Export(logger *zap.Logger) error {
 	}
 
 	spinner.Success("Packages exported successfully")
-	report.Print("Export")
+
+	// Calculate duration
+	duration := time.Since(startTime)
+
+	// Print detailed report
+	fmt.Println("\n📊 Export Summary:")
+	fmt.Printf("Total packages found: %d\n", totalPackages)
+	fmt.Printf("✅ Successfully processed: %d packages\n", report.GetPackages(providers.Success))
+
+	// Print package type breakdown
+	for _, pkgType := range []string{"container", "rubygems", "maven", "npm", "nuget"} {
+		if count, exists := packageStats[pkgType]; exists && count > 0 {
+			emoji := "📦"
+			name := pkgType
+			if pkgType == "container" {
+				name = "docker"
+			}
+			fmt.Printf("  %s %s: %d\n", emoji, name, count)
+		}
+	}
+
+	fmt.Printf("❌ Failed to process: %d packages\n", report.GetPackages(providers.Failed))
+	fmt.Printf("🔍 Repositories with packages: %d\n", len(reposWithPackages))
+	fmt.Printf("📁 Output directory: %s\n", baseDir)
+	fmt.Printf(" Total time: %ds\n\n", int(duration.Seconds()))
+	fmt.Println("✅ Export completed successfully!")
+
 	return nil
 }
