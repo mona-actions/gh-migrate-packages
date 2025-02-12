@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,15 +36,36 @@ func NewProvider(logger *zap.Logger, packageType string) (Provider, error) {
 	}
 }
 
+func newHTTPClient(proxyURL string) (*http.Client, error) {
+	transport := &http.Transport{}
+	if proxyURL != "" {
+		proxy, err := url.Parse(proxyURL)
+		if err != nil {
+			return nil, err
+		}
+		transport.Proxy = http.ProxyURL(proxy)
+	}
+	return &http.Client{Transport: transport}, nil
+}
+
 func FetchFromGraphQL(logger *zap.Logger, owner, token, packageType string) ([]PackageNode, ResultState, error) {
 	logger.Info("Loading package files from GitHub GraphQL API")
 	var allPackages []PackageNode
 	packagesAfter := (*githubv4.String)(nil)
-	src := oauth2.StaticTokenSource(
+	tokenSource := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: token},
 	)
-	httpClient := oauth2.NewClient(context.Background(), src)
-	client := githubv4.NewClient(httpClient)
+	var httpProxy = viper.GetString("HTTPS_PROXY")
+	if httpProxy == "" {
+		httpProxy = viper.GetString("HTTP_PROXY")
+	}
+	httpClient, err := newHTTPClient(viper.GetString("HTTPS_PROXY"))
+	if err != nil {
+		return nil, Failed, err
+	}
+	oauth2Ctx := context.WithValue(context.Background(), oauth2.HTTPClient, httpClient)
+	oauth2Client := oauth2.NewClient(oauth2Ctx, tokenSource)
+	client := githubv4.NewClient(oauth2Client)
 	ctx := context.WithValue(context.Background(), github.SleepUntilPrimaryRateLimitResetWhenRateLimited, true)
 
 	for {
@@ -217,4 +240,31 @@ func (p *BaseProvider) uploadPackage(
 		logger.Info("Successfully downloaded file", zap.String("packageDir", packageDir))
 	}
 	return Success, nil
+}
+
+// NewBaseProvider creates a new BaseProvider with common initialization logic
+func NewBaseProvider(packageType, sourceHostname, targetHostname string, isContainer bool) BaseProvider {
+	if sourceHostname == "" {
+		sourceHostname = "github.com"
+	}
+	if targetHostname == "" {
+		targetHostname = "github.com"
+	}
+
+	var sourceRegistryUrl, targetRegistryUrl string
+	if isContainer {
+		sourceRegistryUrl = "ghcr.io"
+		targetRegistryUrl = "ghcr.io"
+	} else {
+		sourceRegistryUrl = fmt.Sprintf("https://%s.pkg.%s/", packageType, sourceHostname)
+		targetRegistryUrl = fmt.Sprintf("https://%s.pkg.%s/", packageType, targetHostname)
+	}
+
+	return BaseProvider{
+		PackageType:       packageType,
+		SourceRegistryUrl: utils.ParseUrl(sourceRegistryUrl),
+		TargetRegistryUrl: utils.ParseUrl(targetRegistryUrl),
+		SourceHostnameUrl: utils.ParseUrl(fmt.Sprintf("https://%s/", sourceHostname)),
+		TargetHostnameUrl: utils.ParseUrl(fmt.Sprintf("https://%s/", targetHostname)),
+	}
 }

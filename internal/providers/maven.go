@@ -24,13 +24,7 @@ type MavenProvider struct {
 
 func NewMavenProvider(logger *zap.Logger, packageType string) Provider {
 	return &MavenProvider{
-		BaseProvider: BaseProvider{
-			PackageType:       packageType,
-			SourceRegistryUrl: utils.ParseUrl(fmt.Sprintf("https://%s.pkg.%s/", packageType, viper.GetString("GHMPKG_SOURCE_HOSTNAME"))),
-			TargetRegistryUrl: utils.ParseUrl(fmt.Sprintf("https://%s.pkg.%s/", packageType, viper.GetString("GHMPKG_TARGET_HOSTNAME"))),
-			SourceHostnameUrl: utils.ParseUrl(fmt.Sprintf("https://%s/", viper.GetString("GHMPKG_SOURCE_HOSTNAME"))),
-			TargetHostnameUrl: utils.ParseUrl(fmt.Sprintf("https://%s/", viper.GetString("GHMPKG_TARGET_HOSTNAME"))),
-		},
+		BaseProvider: NewBaseProvider(packageType, "", "", false),
 	}
 }
 

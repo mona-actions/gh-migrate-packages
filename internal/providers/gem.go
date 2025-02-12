@@ -20,13 +20,7 @@ type RubyGemsProvider struct {
 
 func NewRubyGemsProvider(logger *zap.Logger, packageType string) Provider {
 	return &RubyGemsProvider{
-		BaseProvider: BaseProvider{
-			PackageType:       packageType,
-			SourceRegistryUrl: utils.ParseUrl(fmt.Sprintf("https://%s.pkg.%s/", packageType, viper.GetString("SOURCE_HOSTNAME"))),
-			TargetRegistryUrl: utils.ParseUrl(fmt.Sprintf("https://%s.pkg.%s/", packageType, viper.GetString("TARGET_HOSTNAME"))),
-			SourceHostnameUrl: utils.ParseUrl(fmt.Sprintf("https://%s/", viper.GetString("SOURCE_HOSTNAME"))),
-			TargetHostnameUrl: utils.ParseUrl(fmt.Sprintf("https://%s/", viper.GetString("TARGET_HOSTNAME"))),
-		},
+		BaseProvider: NewBaseProvider(packageType, "", "", false),
 	}
 }
 
@@ -54,7 +48,7 @@ func (p *RubyGemsProvider) Download(logger *zap.Logger, owner, repository, packa
 		},
 		// Download function
 		func(downloadUrl, outputPath string) (ResultState, error) {
-			if err := utils.DownloadFile(downloadUrl, outputPath, viper.GetString("SOURCE_TOKEN")); err != nil {
+			if err := utils.DownloadFile(downloadUrl, outputPath, viper.GetString("GHMPKG_SOURCE_TOKEN")); err != nil {
 				return Failed, err
 			}
 			return Success, nil
@@ -64,10 +58,10 @@ func (p *RubyGemsProvider) Download(logger *zap.Logger, owner, repository, packa
 
 func (p *RubyGemsProvider) Rename(logger *zap.Logger, repository, filename string) error {
 	// Replace the organization name in the content
-	sourceHostname := utils.ParseUrl(viper.GetString("SOURCE_HOSTNAME"))
-	targetHostname := utils.ParseUrl(viper.GetString("TARGET_HOSTNAME"))
-	sourceHostname.Path = path.Join(sourceHostname.Path, viper.GetString("SOURCE_ORGANIZATION"))
-	targetHostname.Path = path.Join(targetHostname.Path, viper.GetString("TARGET_ORGANIZATION"))
+	sourceHostname := utils.ParseUrl(viper.GetString("GHMPKG_SOURCE_HOSTNAME"))
+	targetHostname := utils.ParseUrl(viper.GetString("GHMPKG_TARGET_HOSTNAME"))
+	sourceHostname.Path = path.Join(sourceHostname.Path, viper.GetString("GHMPKG_SOURCE_ORGANIZATION"))
+	targetHostname.Path = path.Join(targetHostname.Path, viper.GetString("GHMPKG_TARGET_ORGANIZATION"))
 	if err := utils.RenameFileOccurances(filename, sourceHostname.String(), targetHostname.String(), -1); err != nil {
 		return err
 	}
@@ -83,7 +77,7 @@ func (p *RubyGemsProvider) push(owner, dir, gemFile string) error {
 	pushUrl.Path = path.Join(pushUrl.Path, owner)
 	pushCmd := exec.Command("gem", "push", "--key", "github", "--host", pushUrl.String(), gemFile)
 	pushCmd.Dir = dir
-	pushCmd.Env = append(os.Environ(), "HTTPS_PROXY=", "GITHUB_TOKEN="+viper.GetString("TARGET_TOKEN"))
+	pushCmd.Env = append(os.Environ(), "HTTPS_PROXY=", "GITHUB_TOKEN="+viper.GetString("GHMPKG_TARGET_TOKEN"))
 
 	// Capture output to gemlog file
 	pushLogFile, err := os.Create(filepath.Join(pushCmd.Dir, "gempush.log"))

@@ -15,7 +15,6 @@ import (
 	"github.com/docker/docker/api/types/registry"
 	"github.com/docker/docker/client"
 	"github.com/google/go-github/v62/github"
-	"github.com/mona-actions/gh-migrate-packages/internal/utils"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
@@ -31,13 +30,7 @@ type ContainerProvider struct {
 
 func NewContainerProvider(logger *zap.Logger, packageType string) Provider {
 	return &ContainerProvider{
-		BaseProvider: BaseProvider{
-			PackageType:       packageType,
-			SourceRegistryUrl: utils.ParseUrl("ghcr.io"),
-			TargetRegistryUrl: utils.ParseUrl("ghcr.io"),
-			SourceHostnameUrl: utils.ParseUrl(fmt.Sprintf("https://%s/", viper.GetString("SOURCE_HOSTNAME"))),
-			TargetHostnameUrl: utils.ParseUrl(fmt.Sprintf("https://%s/", viper.GetString("TARGET_HOSTNAME"))),
-		},
+		BaseProvider:  NewBaseProvider(packageType, "", "", true),
 		recreatedShas: make(map[string]string),
 	}
 }
@@ -89,8 +82,8 @@ func (p *ContainerProvider) Connect(logger *zap.Logger) error {
 	p.ctx = ctx
 	p.client = client
 
-	sourceOrg := viper.GetString("SOURCE_ORGANIZATION")
-	sourceToken := viper.GetString("SOURCE_TOKEN")
+	sourceOrg := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
+	sourceToken := viper.GetString("GHMPKG_SOURCE_TOKEN")
 	sourceAuthStr, err := p.login(logger, p.SourceRegistryUrl.String(), sourceOrg, sourceToken)
 	if err != nil {
 		logger.Error("Failed to login to source registry", zap.Error(err))
@@ -98,8 +91,8 @@ func (p *ContainerProvider) Connect(logger *zap.Logger) error {
 	}
 	p.sourceAuthStr = sourceAuthStr
 
-	targetOrg := viper.GetString("TARGET_ORGANIZATION")
-	targetToken := viper.GetString("TARGET_TOKEN")
+	targetOrg := viper.GetString("GHMPKG_TARGET_ORGANIZATION")
+	targetToken := viper.GetString("GHMPKG_TARGET_TOKEN")
 	targetAuthStr, err := p.login(logger, p.TargetRegistryUrl.String(), targetOrg, targetToken)
 	if err != nil {
 		logger.Error("Failed to login to target registry", zap.Error(err))
@@ -179,8 +172,8 @@ func (p *ContainerProvider) Download(logger *zap.Logger, owner, repository, pack
 
 func (p *ContainerProvider) Rename(logger *zap.Logger, owner, repository, packageName, version, filename string) error {
 	// Tag image for target registry
-	sourceOrg := viper.GetString("SOURCE_ORGANIZATION")
-	targetOrg := viper.GetString("TARGET_ORGANIZATION")
+	sourceOrg := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
+	targetOrg := viper.GetString("GHMPKG_TARGET_ORGANIZATION")
 	sourceRef, err := p.GetDownloadUrl(logger, sourceOrg, repository, packageName, version, filename)
 	if err != nil {
 		logger.Error("Failed to get download URL", zap.Error(err))
@@ -259,7 +252,7 @@ func (p *ContainerProvider) Upload(logger *zap.Logger, owner, repository, packag
 				logger.Error("Failed to rename image", zap.Error(err))
 				return Failed, err
 			}
-			targetRef, err := p.GetUploadUrl(logger, viper.GetString("TARGET_ORGANIZATION"), repository, packageName, version, filename)
+			targetRef, err := p.GetUploadUrl(logger, viper.GetString("GHMPKG_TARGET_ORGANIZATION"), repository, packageName, version, filename)
 			if err != nil {
 				logger.Error("Failed to get upload URL", zap.Error(err))
 				return Failed, err

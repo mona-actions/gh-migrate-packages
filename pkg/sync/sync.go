@@ -14,19 +14,9 @@ import (
 	"go.uber.org/zap"
 )
 
-func checkVars() {
-	//check that repository and repository list are not sent at the same time
-	if viper.GetString("REPOSITORY") != "" && viper.GetString("REPOSITORY_LIST") != "" {
-		pterm.Error.Println("Error: Cannot specify both a repository and a repository list")
-		os.Exit(1)
-	} else if viper.GetString("REPOSITORY") != "" && viper.GetString("SOURCE_ORGANIZATION") == "" {
-		pterm.Error.Println("Error: Source organization is required when specifying a repository")
-		os.Exit(1)
-	}
-}
 
 func checkPath(logger *zap.Logger) {
-	packageType := viper.GetString("PACKAGE_TYPE")
+	packageType := viper.GetString("GHMPKG_PACKAGE_TYPE")
 	switch packageType {
 	case "nuget":
 		if !utils.FileExists("./tool/gpr") {
@@ -47,7 +37,7 @@ func checkPath(logger *zap.Logger) {
 }
 
 func Upload(logger *zap.Logger, provider providers.Provider, report *common.Report, repository, packageType, packageName, version string, filenames []string) error {
-	owner := viper.GetString("TARGET_ORGANIZATION")
+	owner := viper.GetString("GHMPKG_TARGET_ORGANIZATION")
 	zapFields := []zap.Field{
 		zap.String("owner", owner),
 		zap.String("repository", repository),
@@ -74,10 +64,9 @@ func Upload(logger *zap.Logger, provider providers.Provider, report *common.Repo
 func Sync(logger *zap.Logger) error {
 	utils.ResetRequestCounters()
 	// Get all releases from source repository
-	checkVars()
 	checkPath(logger)
-	owner := viper.GetString("SOURCE_ORGANIZATION")
-	desiredPackageType := viper.GetString("PACKAGE_TYPE")
+	owner := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
+	desiredPackageType := viper.GetString("GHMPKG_PACKAGE_TYPE")
 	prefix := owner
 	if desiredPackageType != "" {
 		prefix = fmt.Sprintf("%s-%s", owner, desiredPackageType)

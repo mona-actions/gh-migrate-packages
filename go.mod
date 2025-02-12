@@ -5,15 +5,14 @@ go 1.23
 toolchain go1.23.4
 
 require (
-	github.com/docker/docker v27.3.1+incompatible
-	github.com/gofri/go-github-ratelimit v1.1.0
+	github.com/docker/docker v27.5.1+incompatible
 	github.com/google/go-github/v62 v62.0.0
-	github.com/pterm/pterm v0.12.79
+	github.com/pterm/pterm v0.12.80
 	github.com/shurcooL/githubv4 v0.0.0-20240727222349-48295856cce7
-	github.com/spf13/cobra v1.8.0
-	github.com/spf13/viper v1.18.2
-	go.uber.org/zap v1.21.0
-	golang.org/x/oauth2 v0.20.0
+	github.com/spf13/cobra v1.8.1
+	github.com/spf13/viper v1.19.0
+	go.uber.org/zap v1.27.0
+	golang.org/x/oauth2 v0.26.0
 )
 
 require (
@@ -37,7 +36,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/lithammer/fuzzysearch v1.1.8 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
-	github.com/mattn/go-runewidth v0.0.15 // indirect
+	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/term v0.5.0 // indirect
@@ -62,11 +61,10 @@ require (
 	go.opentelemetry.io/otel/metric v1.32.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.32.0 // indirect
 	go.opentelemetry.io/otel/trace v1.32.0 // indirect
-	go.uber.org/atomic v1.9.0 // indirect
-	go.uber.org/multierr v1.9.0 // indirect
+	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/sys v0.27.0 // indirect
-	golang.org/x/term v0.20.0 // indirect
+	golang.org/x/term v0.26.0 // indirect
 	golang.org/x/text v0.20.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

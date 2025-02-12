@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap"
 )
 
-//var SUPPORTED_PACKAGE_TYPES = []string{"maven", "npm", "container", "rubygems", "nuget"}
+// var SUPPORTED_PACKAGE_TYPES = []string{"maven", "npm", "container", "rubygems", "nuget"}
 var SUPPORTED_PACKAGE_TYPES = []string{"maven", "npm", "container", "rubygems", "nuget"}
 
 func Export(logger *zap.Logger) error {
@@ -29,7 +29,7 @@ func Export(logger *zap.Logger) error {
 	spinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Exporting packages from source org: %s", owner))
 
 	packagesCSV := [][]string{
-		{"Organization", "Repository", "Package Type", "Package Name", "Package Version", "Package Filename"},
+		{"organization", "repository", "package_type", "package_name", "package_version", "package_filename"},
 	}
 	for _, packageType := range SUPPORTED_PACKAGE_TYPES {
 		if desiredPackageType != "" && desiredPackageType != packageType {

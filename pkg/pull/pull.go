@@ -87,6 +87,7 @@ func Pull(logger *zap.Logger) error {
 	println(exportFilename)
 
 	// check if exportFilename exists
+	
 	if !utils.FileExists(exportFilename) {
 		spinner.Fail(common.ARE_YOU_SURE_YOU_EXPORTED)
 		return fmt.Errorf(common.ARE_YOU_SURE_YOU_EXPORTED)

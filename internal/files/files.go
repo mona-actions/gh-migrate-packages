@@ -3,7 +3,6 @@ package files
 import (
 	"bufio"
 	"encoding/json"
-	"net/url"
 	"os"
 	"strings"
 
@@ -89,39 +88,4 @@ func ReadCSV(filename string) ([][]string, error) {
 	}
 
 	return data, nil
-}
-
-// read repository list from file assuming each line is a repository
-func ReadRepositoryListFromFile(fileName string) ([]string, error) {
-	file, err := os.Open(fileName)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	var repositories []string
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		repo := scanner.Text()
-		parsedURL, err := url.Parse(repo)
-		if err != nil {
-			return nil, err
-		}
-		path := strings.TrimPrefix(parsedURL.Path, "/")
-		repositories = append(repositories, path)
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-
-	return repositories, nil
-}
-
-func FileExists(path string) bool {
-	_, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	return true
 }

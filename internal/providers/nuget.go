@@ -19,13 +19,7 @@ type NugetProvider struct {
 
 func NewNugetProvider(logger *zap.Logger, packageType string) Provider {
 	return &NugetProvider{
-		BaseProvider: BaseProvider{
-			PackageType:       packageType,
-			SourceRegistryUrl: utils.ParseUrl(fmt.Sprintf("https://%s.pkg.%s/", packageType, viper.GetString("SOURCE_HOSTNAME"))),
-			TargetRegistryUrl: utils.ParseUrl(fmt.Sprintf("https://%s.pkg.%s/", packageType, viper.GetString("TARGET_HOSTNAME"))),
-			SourceHostnameUrl: utils.ParseUrl(fmt.Sprintf("https://%s/", viper.GetString("SOURCE_HOSTNAME"))),
-			TargetHostnameUrl: utils.ParseUrl(fmt.Sprintf("https://%s/", viper.GetString("TARGET_HOSTNAME"))),
-		},
+		BaseProvider: NewBaseProvider(packageType, "", "", false),
 	}
 }
 
@@ -53,7 +47,7 @@ func (p *NugetProvider) Download(logger *zap.Logger, owner, repository, packageT
 		},
 		// Download function
 		func(downloadUrl, outputPath string) (ResultState, error) {
-			if err := utils.DownloadFile(downloadUrl, outputPath, viper.GetString("SOURCE_TOKEN")); err != nil {
+			if err := utils.DownloadFile(downloadUrl, outputPath, viper.GetString("GHMPKG_SOURCE_TOKEN")); err != nil {
 				return Failed, err
 			}
 			return Success, nil
@@ -93,7 +87,7 @@ func (p *NugetProvider) Upload(logger *zap.Logger, owner, repository, packageTyp
 				return Failed, err
 			}
 			// Run nuget publish
-			pushCmd := exec.Command("./tool/gpr", "push", nupkg, "--repository", uploadUrl, "-k", viper.GetString("TARGET_TOKEN"))
+			pushCmd := exec.Command("./tool/gpr", "push", nupkg, "--repository", uploadUrl, "-k", viper.GetString("GHMPKG_TARGET_TOKEN"))
 
 			// // Capture output to nugetlog file
 			logFile, err := os.Create(filepath.Join(packageDir, "nugetlog"))

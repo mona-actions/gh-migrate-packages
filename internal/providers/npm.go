@@ -75,24 +75,8 @@ type NPMProvider struct {
 }
 
 func NewNPMProvider(logger *zap.Logger, packageType string) Provider {
-	sourceHostname := viper.GetString("GHMPKG_SOURCE_HOSTNAME")
-	if sourceHostname == "" {
-		sourceHostname = "github.com"
-	}
-
-	targetHostname := viper.GetString("GHMPKG_TARGET_HOSTNAME")
-	if targetHostname == "" {
-		targetHostname = "github.com"
-	}
-
 	return &NPMProvider{
-		BaseProvider: BaseProvider{
-			PackageType:       packageType,
-			SourceRegistryUrl: utils.ParseUrl(fmt.Sprintf("https://%s.pkg.%s/", packageType, sourceHostname)),
-			TargetRegistryUrl: utils.ParseUrl(fmt.Sprintf("https://%s.pkg.%s/", packageType, targetHostname)),
-			SourceHostnameUrl: utils.ParseUrl(fmt.Sprintf("https://%s/", sourceHostname)),
-			TargetHostnameUrl: utils.ParseUrl(fmt.Sprintf("https://%s/", targetHostname)),
-		},
+		BaseProvider: NewBaseProvider(packageType, "", "", false),
 	}
 }
 
