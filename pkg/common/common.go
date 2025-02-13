@@ -12,6 +12,7 @@ import (
 )
 
 var SUPPORTED_PACKAGE_TYPES = []string{"container", "rubygems", "maven", "npm", "nuget"}
+
 const ARE_YOU_SURE_YOU_EXPORTED = "Are you sure you exported first? gh migrate-packages export --help"
 
 type Report struct {
@@ -106,7 +107,6 @@ type ProcessCallback func(
 	filenames []string) error
 
 func ProcessPackages(logger *zap.Logger, packages [][]string, fn ProcessCallback, skipIfExists bool) (*Report, error) {
-
 	report := NewReport()
 	desiredPackageType := viper.GetString("GHMPKG_PACKAGE_TYPE")
 	var provider providers.Provider

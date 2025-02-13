@@ -91,6 +91,7 @@ func Export(logger *zap.Logger) error {
 			pterm.Info.Printf("  package %d/%d: %s\n", i+1, len(packages), pkg.GetName())
 
 			versions, err := api.FetchPackageVersions(pkg)
+			spinner.UpdateText(fmt.Sprintf("Exporting %s package(%s) from %s/%s", pkg.GetName(), packageType, owner, pkg.Repository.GetName()))
 			if err != nil {
 				spinner.Fail(fmt.Sprintf("❌ Error getting versions: %v", err))
 				return err
