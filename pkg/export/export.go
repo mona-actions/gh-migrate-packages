@@ -86,7 +86,7 @@ func Export(logger *zap.Logger) error {
 			for _, version := range versions {
 				filenames, result, err := provider.FetchPackageFiles(logger, owner, pkg.Repository.GetName(), packageType, pkg.GetName(), version.GetName(), version.Metadata)
 				if result != providers.Success {
-					report.IncPackages(result)
+					report.IncPackages(result, packageType)
 					report.IncVersions(result)
 				}
 				if err != nil {
@@ -99,7 +99,7 @@ func Export(logger *zap.Logger) error {
 				}
 				report.IncVersions(providers.Success)
 			}
-			report.IncPackages(providers.Success)
+			report.IncPackages(providers.Success, packageType)
 		}
 
 		// Create package type directory

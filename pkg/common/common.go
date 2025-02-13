@@ -14,55 +14,94 @@ import (
 const ARE_YOU_SURE_YOU_EXPORTED = "Are you sure you exported first? git gh-migrate-packages export --help"
 
 type Report struct {
-	PackageSuccess  int
-	VersionSuccess  int
-	FileSuccess     int
-	PackagesSkipped int
-	VersionsSkipped int
-	FilesSkipped    int
-	PackagesFailed  int
-	VersionsFailed  int
-	FilesFailed     int
+	PackageSuccess       int
+	VersionSuccess       int
+	FileSuccess          int
+	PackagesSkipped      int
+	VersionsSkipped      int
+	FilesSkipped         int
+	PackagesFailed       int
+	VersionsFailed       int
+	FilesFailed          int
+	PackageSuccessByType map[string]int
+	PackageFailedByType  map[string]int
+	PackageSkippedByType map[string]int
 }
 
 func NewReport() *Report {
 	return &Report{
-		PackageSuccess:  0,
-		VersionSuccess:  0,
-		FileSuccess:     0,
-		PackagesSkipped: 0,
-		VersionsSkipped: 0,
-		FilesSkipped:    0,
-		PackagesFailed:  0,
-		VersionsFailed:  0,
-		FilesFailed:     0,
+		PackageSuccess:       0,
+		VersionSuccess:       0,
+		FileSuccess:          0,
+		PackagesSkipped:      0,
+		VersionsSkipped:      0,
+		FilesSkipped:         0,
+		PackagesFailed:       0,
+		VersionsFailed:       0,
+		FilesFailed:          0,
+		PackageSuccessByType: make(map[string]int),
+		PackageFailedByType:  make(map[string]int),
+		PackageSkippedByType: make(map[string]int),
 	}
 }
 
 func (r *Report) Print(name string) {
-	pterm.Info.Printf("%s Report\n", name)
+	pterm.Info.Printf("📊 %s Report\n", name)
 	pterm.Info.Println("Total Packages:", r.PackageSuccess+r.PackagesSkipped+r.PackagesFailed)
 	pterm.Info.Println("Total Versions:", r.VersionSuccess+r.VersionsSkipped+r.VersionsFailed)
 	pterm.Info.Println("Total Files:", r.FileSuccess+r.FilesSkipped+r.FilesFailed)
 	pterm.Info.Println("Success Packages:", r.PackageSuccess)
+	pterm.Info.Println("Success Packages by Type:")
+	for packageType, count := range r.PackageSuccessByType {
+		pterm.Info.Printf("  %s: %d\n", packageType, count)
+	}
+	pterm.Info.Println("Failed Packages:", r.PackagesFailed)
+	pterm.Info.Println("Failed Packages by Type:")
+	for packageType, count := range r.PackageFailedByType {
+		pterm.Info.Printf("  %s: %d\n", packageType, count)
+	}
+	pterm.Info.Println("Skipped Packages:", r.PackagesSkipped)
+	pterm.Info.Println("Skipped Packages by Type:")
+	for packageType, count := range r.PackageSkippedByType {
+		pterm.Info.Printf("  %s: %d\n", packageType, count)
+	}
 	pterm.Info.Println("Success Versions:", r.VersionSuccess)
 	pterm.Info.Println("Success Files:", r.FileSuccess)
-	pterm.Info.Println("Skipped Packages:", r.PackagesSkipped)
 	pterm.Info.Println("Skipped Versions:", r.VersionsSkipped)
 	pterm.Info.Println("Skipped Files:", r.FilesSkipped)
-	pterm.Info.Println("Failed Packages:", r.PackagesFailed)
 	pterm.Info.Println("Failed Versions:", r.VersionsFailed)
 	pterm.Info.Println("Failed Files:", r.FilesFailed)
 }
 
-func (r *Report) IncPackages(result providers.ResultState) {
+func (r *Report) IncSuccessPackages(packageType string) {
+	r.PackageSuccess++
+	if packageType != "" {
+		r.PackageSuccessByType[packageType]++
+	}
+}
+
+func (r *Report) IncFailedPackages(packageType string) {
+	r.PackagesFailed++
+	if packageType != "" {
+		r.PackageFailedByType[packageType]++
+	}
+}
+
+func (r *Report) IncSkippedPackages(packageType string) {
+	r.PackagesSkipped++
+	if packageType != "" {
+		r.PackageSkippedByType[packageType]++
+	}
+}
+
+func (r *Report) IncPackages(result providers.ResultState, packageType string) {
 	switch result {
 	case providers.Success:
-		r.PackageSuccess++
-	case providers.Skipped:
-		r.PackagesSkipped++
+		r.IncSuccessPackages(packageType)
 	case providers.Failed:
-		r.PackagesFailed++
+		r.IncFailedPackages(packageType)
+	case providers.Skipped:
+		r.IncSkippedPackages(packageType)
 	}
 }
 
@@ -99,7 +138,6 @@ type ProcessCallback func(
 	filenames []string) error
 
 func ProcessPackages(logger *zap.Logger, packages [][]string, fn ProcessCallback, skipIfExists bool) (*Report, error) {
-
 	report := NewReport()
 	desiredPackageType := viper.GetString("PACKAGE_TYPE")
 	var provider providers.Provider
@@ -143,12 +181,12 @@ func ProcessPackages(logger *zap.Logger, packages [][]string, fn ProcessCallback
 		if skipIfExists {
 			exists, err := api.PackageExists(packageName, packageType)
 			if err != nil {
-				report.IncPackages(providers.Failed)
+				report.IncPackages(providers.Failed, packageType)
 				return report, err
 			}
 
 			if exists {
-				report.IncPackages(providers.Skipped)
+				report.IncPackages(providers.Skipped, packageType)
 				logger.Info("Package already exists, skipping...", zap.String("package", packageName))
 				continue
 			}
@@ -189,11 +227,11 @@ func ProcessPackages(logger *zap.Logger, packages [][]string, fn ProcessCallback
 			}
 		}
 		if report.VersionsFailed > versionsFailed {
-			report.IncPackages(providers.Failed)
+			report.IncPackages(providers.Failed, packageType)
 		} else if report.VersionsSkipped > versionsSkipped {
-			report.IncPackages(providers.Skipped)
+			report.IncPackages(providers.Skipped, packageType)
 		} else {
-			report.IncPackages(providers.Success)
+			report.IncPackages(providers.Success, packageType)
 		}
 	}
 
