@@ -12,6 +12,7 @@ import (
 func GetFlagOrEnv(cmd *cobra.Command, flags map[string]bool) map[string]string {
 	values := make(map[string]string)
 	var missing []string
+	var isTokenValid bool
 
 	for name, required := range flags {
 		// For CLI flags, strip GHMPKG_ prefix if present
@@ -43,10 +44,20 @@ func GetFlagOrEnv(cmd *cobra.Command, flags map[string]bool) map[string]string {
 		} else if required {
 			missing = append(missing, flagName)
 		}
+
+		//if flagname contains `-token` or envName container `TOKEN`check if token is valid
+		if strings.Contains(flagName, "token") || strings.Contains(envName, "TOKEN") {
+			isTokenValid = checkToken(value)
+		}
 	}
 
 	if len(missing) > 0 {
 		fmt.Fprintf(os.Stderr, "Error: missing required values: %s\n", strings.Join(missing, ", "))
+		os.Exit(1)
+	}
+
+	if !isTokenValid {
+		fmt.Println("Error: token must be a GitHub Personal Access Token.")
 		os.Exit(1)
 	}
 
@@ -95,4 +106,8 @@ func getProxyStatus() string {
 		return "✅ Proxy: Configured\n"
 	}
 	return "❎ Proxy: Not configured\n"
+}
+
+func checkToken(token string) bool {
+	return strings.HasPrefix(token, "ghp_") || strings.HasPrefix(token, "github_pat_")
 }
