@@ -29,7 +29,7 @@ func Export(logger *zap.Logger) error {
 	spinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Exporting packages from source org: %s", owner))
 
 	// Create base export directory
-	baseDir := "./migration-packages/packages"
+	baseDir := "./migration-packages/export"
 	if err := files.EnsureDir(baseDir); err != nil {
 		spinner.Fail(fmt.Sprintf("Error creating base directory: %v", err))
 		return err

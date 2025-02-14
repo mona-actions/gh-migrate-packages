@@ -107,7 +107,7 @@ func Pull(logger *zap.Logger) error {
 		matches, err := utils.FindMostRecentFile(pattern)
 		if err != nil {
 			// Try alternate pattern without owner in filename
-			altPattern := fmt.Sprintf("./packages-migration/%s/*_%s_packages.csv", pkgType, pkgType)
+			altPattern := fmt.Sprintf("./migration-packages/%s/*_%s_packages.csv", pkgType, pkgType)
 			logger.Debug("Trying alternate pattern",
 				zap.String("altPattern", altPattern))
 

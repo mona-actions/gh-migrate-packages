@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -104,7 +103,6 @@ func (p *NPMProvider) FetchPackageFiles(logger *zap.Logger, owner, repository, p
 	if resp.StatusCode != http.StatusOK {
 		return nil, Failed, fmt.Errorf("failed to fetch package %s, status: %d, message: %s", fetchUrl, resp.StatusCode, resp.Status)
 	}
-	// print json response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, Failed, err
@@ -113,11 +111,9 @@ func (p *NPMProvider) FetchPackageFiles(logger *zap.Logger, owner, repository, p
 	if err := json.Unmarshal(body, &npmPackage); err != nil {
 		return nil, Failed, err
 	}
-	tarballUrl, err := url.Parse(npmPackage.Versions[version].Dist.Tarball)
-	if err != nil {
-		return nil, Failed, err
-	}
-	filename := path.Base(tarballUrl.Path)
+
+	// Generate the expected tarball filename instead of using the SHA
+	filename := fmt.Sprintf("%s-%s.tgz", packageName, version)
 	var filenames []string
 	filenames = append(filenames, filename)
 	return filenames, Success, nil
