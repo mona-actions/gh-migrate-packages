@@ -84,21 +84,25 @@ func (p *ContainerProvider) Connect(logger *zap.Logger) error {
 
 	sourceOrg := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
 	sourceToken := viper.GetString("GHMPKG_SOURCE_TOKEN")
-	sourceAuthStr, err := p.login(logger, p.SourceRegistryUrl.String(), sourceOrg, sourceToken)
-	if err != nil {
-		logger.Error("Failed to login to source registry", zap.Error(err))
-		return err
+	if sourceOrg != "" && sourceToken != "" {
+		sourceAuthStr, err := p.login(logger, p.SourceRegistryUrl.String(), sourceOrg, sourceToken)
+		if err != nil {
+			logger.Error("Failed to login to source registry", zap.Error(err))
+			return err
+		}
+		p.sourceAuthStr = sourceAuthStr
 	}
-	p.sourceAuthStr = sourceAuthStr
 
 	targetOrg := viper.GetString("GHMPKG_TARGET_ORGANIZATION")
 	targetToken := viper.GetString("GHMPKG_TARGET_TOKEN")
-	targetAuthStr, err := p.login(logger, p.TargetRegistryUrl.String(), targetOrg, targetToken)
-	if err != nil {
-		logger.Error("Failed to login to target registry", zap.Error(err))
-		return err
+	if targetOrg != "" && targetToken != "" { //if targetOrg and token are empty, we don't need to login
+		targetAuthStr, err := p.login(logger, p.TargetRegistryUrl.String(), targetOrg, targetToken)
+		if err != nil {
+			logger.Error("Failed to login to target registry", zap.Error(err))
+			return err
+		}
+		p.targetAuthStr = targetAuthStr
 	}
-	p.targetAuthStr = targetAuthStr
 
 	return nil
 }
@@ -119,6 +123,12 @@ func (p *ContainerProvider) Download(logger *zap.Logger, owner, repository, pack
 	parts := strings.Split(filename, ":")
 	tag := parts[1]
 	downloadedFilename := fmt.Sprintf("%s-%s.tar", packageName, tag)
+
+	//lowercase owner, repository and packageName to avoid issues with docker
+	owner = strings.ToLower(owner)
+	repository = strings.ToLower(repository)
+	packageName = strings.ToLower(packageName)
+
 	return p.downloadPackage(
 		logger, owner, repository, packageType, packageName, version, filename, &downloadedFilename,
 		// URL generator function
