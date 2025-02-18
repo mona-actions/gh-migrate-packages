@@ -104,23 +104,25 @@ func (p *ContainerProvider) Connect(logger *zap.Logger) error {
 	p.ctx = ctx
 	p.client = client
 
-	sourceOrg = viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
-	sourceToken = viper.GetString("GHMPKG_SOURCE_TOKEN")
-	sourceAuthStr, err := p.login(logger, p.SourceRegistryUrl.String(), sourceOrg, sourceToken)
-	if err != nil {
-		logger.Error("Failed to login to source registry", zap.Error(err))
-		return err
+	if sourceOrg != "" && sourceToken != "" {
+		sourceAuthStr, err := p.login(logger, p.SourceRegistryUrl.String(), sourceOrg, sourceToken)
+		if err != nil {
+			logger.Error("Failed to login to source registry", zap.Error(err))
+			return err
+		}
+		p.sourceAuthStr = sourceAuthStr
 	}
-	p.sourceAuthStr = sourceAuthStr
 
 	targetOrg := viper.GetString("GHMPKG_TARGET_ORGANIZATION")
 	targetToken := viper.GetString("GHMPKG_TARGET_TOKEN")
-	targetAuthStr, err := p.login(logger, p.TargetRegistryUrl.String(), targetOrg, targetToken)
-	if err != nil {
-		logger.Error("Failed to login to target registry", zap.Error(err))
-		return err
+	if targetOrg != "" && targetToken != "" { //if targetOrg and token are empty, we don't need to login
+		targetAuthStr, err := p.login(logger, p.TargetRegistryUrl.String(), targetOrg, targetToken)
+		if err != nil {
+			logger.Error("Failed to login to target registry", zap.Error(err))
+			return err
+		}
+		p.targetAuthStr = targetAuthStr
 	}
-	p.targetAuthStr = targetAuthStr
 
 	return nil
 }
@@ -147,6 +149,12 @@ func (p *ContainerProvider) Download(logger *zap.Logger, owner, repository, pack
 	parts := strings.Split(filename, ":")
 	tag := parts[1]
 	downloadedFilename := fmt.Sprintf("%s-%s.tar", packageName, tag)
+
+	//lowercase owner, repository and packageName to avoid issues with docker
+	owner = strings.ToLower(owner)
+	repository = strings.ToLower(repository)
+	packageName = strings.ToLower(packageName)
+
 	return p.downloadPackage(
 		logger, owner, repository, packageType, packageName, version, filename, &downloadedFilename,
 		// URL generator function
@@ -159,22 +167,30 @@ func (p *ContainerProvider) Download(logger *zap.Logger, owner, repository, pack
 				RegistryAuth: p.sourceAuthStr,
 			})
 			if err != nil {
-				logger.Error("Failed to pull image", zap.Error(err))
+				logger.Error("Failed to pull image",
+					zap.String("package", packageName),
+					zap.String("version", version),
+					zap.String("image", downloadUrl),
+					zap.Error(err))
 				return Failed, err
 			}
 			defer pullResp.Close()
 
 			// Must read the response to complete the pull
-			_, err = io.Copy(io.Discard, pullResp)
-			if err != nil {
-				logger.Error("Failed to read pull response", zap.Error(err))
+			if _, err = io.Copy(io.Discard, pullResp); err != nil {
+				logger.Error("Failed to read pull response",
+					zap.String("image", downloadUrl),
+					zap.Error(err))
 				return Failed, err
 			}
 
 			// Save image to file
 			saveResp, err := p.client.ImageSave(p.ctx, []string{downloadUrl})
 			if err != nil {
-				logger.Error("Failed to save image", zap.Error(err))
+				logger.Error("Failed to save image",
+					zap.String("image", downloadUrl),
+					zap.String("output", outputPath),
+					zap.Error(err))
 				return Failed, err
 			}
 			defer saveResp.Close()
@@ -182,15 +198,19 @@ func (p *ContainerProvider) Download(logger *zap.Logger, owner, repository, pack
 			// Create output file
 			outputFile, err := os.Create(outputPath)
 			if err != nil {
-				logger.Error("Failed to create output file", zap.Error(err))
+				logger.Error("Failed to create output file",
+					zap.String("path", outputPath),
+					zap.Error(err))
 				return Failed, err
 			}
 			defer outputFile.Close()
 
 			// Copy image to file
-			_, err = io.Copy(outputFile, saveResp)
-			if err != nil {
-				logger.Error("Failed to write image to file", zap.Error(err))
+			if _, err = io.Copy(outputFile, saveResp); err != nil {
+				logger.Error("Failed to write image to file",
+					zap.String("path", outputPath),
+					zap.String("image", downloadUrl),
+					zap.Error(err))
 				return Failed, err
 			}
 			return Success, nil
