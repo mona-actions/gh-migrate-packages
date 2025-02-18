@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mona-actions/gh-migrate-packages/internal/files"
 	"github.com/mona-actions/gh-migrate-packages/internal/providers"
@@ -15,6 +16,7 @@ import (
 )
 
 var SUPPORTED_PACKAGE_TYPES = []string{"container", "rubygems", "maven", "npm", "nuget"}
+var currentSpinner *pterm.SpinnerPrinter
 
 func Download(logger *zap.Logger, provider providers.Provider, report *common.Report, repository, packageType, packageName, version string, filenames []string) error {
 	owner := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
@@ -24,6 +26,10 @@ func Download(logger *zap.Logger, provider providers.Provider, report *common.Re
 		zap.String("packageType", packageType),
 		zap.String("packageName", packageName),
 		zap.String("version", version),
+	}
+
+	if currentSpinner != nil {
+		currentSpinner.UpdateText(fmt.Sprintf("📦 Downloading %s package (%s) from %s/%s", packageName, packageType, owner, repository))
 	}
 
 	// Create error channel to collect errors from workers
@@ -79,6 +85,10 @@ func Pull(logger *zap.Logger) error {
 	owner := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
 	desiredPackageType := viper.GetString("GHMPKG_PACKAGE_TYPES")
 	spinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Downloading packages from source org: %s", owner))
+	currentSpinner = spinner
+	defer func() {
+		currentSpinner = nil
+	}()
 
 	// Handle either specific package type or all package types
 	packageTypes := SUPPORTED_PACKAGE_TYPES
@@ -92,7 +102,8 @@ func Pull(logger *zap.Logger) error {
 
 	var allPackages [][]string
 	for _, pkgType := range packageTypes {
-		println(pkgType)
+		time.Sleep(1 * time.Second)
+		spinner.UpdateText(fmt.Sprintf("Parsing packages for package type: %s", pkgType))
 		// Look for the most recent CSV file in the package type directory
 		pattern := fmt.Sprintf("./packages-migration/%s/*_%s_%s_packages.csv", pkgType, owner, pkgType)
 		matches, err := utils.FindMostRecentFile(pattern)

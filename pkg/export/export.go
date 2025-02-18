@@ -79,6 +79,7 @@ func Export(logger *zap.Logger) error {
 		for _, pkg := range packages {
 			// ... existing version processing code ...
 			versions, err := api.FetchPackageVersions(pkg)
+			spinner.UpdateText(fmt.Sprintf("Exporting %s package(%s) from %s/%s", pkg.GetName(), packageType, owner, pkg.Repository.GetName()))
 			if err != nil {
 				spinner.Fail(fmt.Sprintf("Error getting versions: %v", err))
 				return err
@@ -117,7 +118,7 @@ func Export(logger *zap.Logger) error {
 		}
 	}
 
-	spinner.Success("Packages exported successfully")
+	spinner.Success("✅ Packages exported successfully")
 	report.Print("Export")
 	return nil
 }

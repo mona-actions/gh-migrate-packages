@@ -50,20 +50,20 @@ func (r *Report) Print(name string) {
 	pterm.Info.Println("Total Packages:", r.PackageSuccess+r.PackagesSkipped+r.PackagesFailed)
 	pterm.Info.Println("Total Versions:", r.VersionSuccess+r.VersionsSkipped+r.VersionsFailed)
 	pterm.Info.Println("Total Files:", r.FileSuccess+r.FilesSkipped+r.FilesFailed)
-	pterm.Info.Println("Success Packages:", r.PackageSuccess)
-	pterm.Info.Println("Success Packages by Type:")
+	pterm.Info.Println("✅ Success Packages:", r.PackageSuccess)
+	pterm.Info.Println("✅ Success Packages by Type:")
 	for packageType, count := range r.PackageSuccessByType {
-		pterm.Info.Printf("  %s: %d\n", packageType, count)
+		pterm.Info.Printf(" 📦 %s: %d\n", packageType, count)
 	}
-	pterm.Info.Println("Failed Packages:", r.PackagesFailed)
-	pterm.Info.Println("Failed Packages by Type:")
+	pterm.Info.Println("❌ Failed Packages:", r.PackagesFailed)
+	pterm.Info.Println("❌ Failed Packages by Type:")
 	for packageType, count := range r.PackageFailedByType {
-		pterm.Info.Printf("  %s: %d\n", packageType, count)
+		pterm.Info.Printf(" 📦 %s: %d\n", packageType, count)
 	}
-	pterm.Info.Println("Skipped Packages:", r.PackagesSkipped)
-	pterm.Info.Println("Skipped Packages by Type:")
+	pterm.Info.Println("ℹ️ Skipped Packages:", r.PackagesSkipped)
+	pterm.Info.Println("ℹ️ Skipped Packages by Type:")
 	for packageType, count := range r.PackageSkippedByType {
-		pterm.Info.Printf("  %s: %d\n", packageType, count)
+		pterm.Info.Printf(" 📦 %s: %d\n", packageType, count)
 	}
 	pterm.Info.Println("Success Versions:", r.VersionSuccess)
 	pterm.Info.Println("Success Files:", r.FileSuccess)
