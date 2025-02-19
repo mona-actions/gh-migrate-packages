@@ -2,7 +2,6 @@ package pull
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -32,9 +31,6 @@ func Download(logger *zap.Logger, provider providers.Provider, report *common.Re
 		currentSpinner.UpdateText(fmt.Sprintf("📦 Downloading %s package (%s) from %s/%s", packageName, packageType, owner, repository))
 	}
 
-	// Create error channel to collect errors from workers
-	errChan := make(chan error, len(filenames))
-
 	// Create semaphore channel for concurrency control
 	sem := make(chan struct{}, 5)
 
@@ -49,15 +45,17 @@ func Download(logger *zap.Logger, provider providers.Provider, report *common.Re
 
 			// Acquire semaphore
 			sem <- struct{}{}
-			defer func() {
-				// Release semaphore
-				<-sem
-			}()
+			defer func() { <-sem }()
 
 			logger.Info("Downloading package", append(zapFields, zap.String("filename", filename))...)
-			if result, err := provider.Download(logger, owner, repository, packageType, packageName, version, filename); err != nil {
-				logger.Error("Failed to download package", append(zapFields, zap.String("filename", filename), zap.Error(err))...)
-				errChan <- fmt.Errorf("failed to download %s: %w", filename, err)
+			result, err := provider.Download(logger, owner, repository, packageType, packageName, version, filename)
+			if err != nil {
+				// Log error and update report, but don't stop processing
+				logger.Error("Failed to download package",
+					append(zapFields,
+						zap.String("filename", filename),
+						zap.Error(err))...)
+				report.IncFiles(providers.Failed)
 			} else {
 				report.IncFiles(result)
 			}
@@ -66,18 +64,8 @@ func Download(logger *zap.Logger, provider providers.Provider, report *common.Re
 
 	// Wait for all downloads to complete
 	wg.Wait()
-	close(errChan)
 
-	// Check for any errors
-	var errs []string
-	for err := range errChan {
-		errs = append(errs, err.Error())
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("download errors: %s", strings.Join(errs, "; "))
-	}
-
+	// Return nil so processing continues with other packages
 	return nil
 }
 
@@ -127,14 +115,15 @@ func Pull(logger *zap.Logger) error {
 		return fmt.Errorf("no package export files found")
 	}
 
-	var report *common.Report
-	var err error
-	if report, err = common.ProcessPackages(logger, allPackages, Download, false); err != nil {
-		spinner.Fail(fmt.Sprintf("Error pulling package: %v", err))
-		return err
+	report, _ := common.ProcessPackages(logger, allPackages, Download, false)
+
+	// Update spinner based on results
+	if report.PackagesFailed > 0 {
+		spinner.Warning(fmt.Sprintf("Pulling packages process completed with some failures: %d package(s) failed", report.PackagesFailed))
+	} else {
+		spinner.Success("All packages pulled successfully")
 	}
 
-	spinner.Success("Packages downloaded successfully")
 	report.Print("Pull")
 	return nil
 }

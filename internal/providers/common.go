@@ -179,25 +179,34 @@ func (p *BaseProvider) downloadPackage(
 	}
 
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
-		logger.Error("Failed to create directories", zap.Error(err))
-		return Failed, err
+		logger.Error("Failed to create directories",
+			zap.String("package", packageName),
+			zap.String("version", version),
+			zap.Error(err))
+		return Failed, nil // Return nil error to continue processing
 	}
 
 	downloadUrl, err := getUrl()
 	if err != nil {
-		logger.Error("Error getting download URL", zap.Error(err))
-		return Failed, err
+		logger.Error("Error getting download URL",
+			zap.String("package", packageName),
+			zap.String("version", version),
+			zap.Error(err))
+		return Failed, nil // Return nil error to continue processing
 	}
 
 	logger.Info("Downloading file", zap.String("url", downloadUrl))
-	var result ResultState
-	if result, err = download(downloadUrl, outputPath); err != nil {
-		logger.Error("Error downloading file", zap.Error(err))
-		return Failed, err
+	result, err := download(downloadUrl, outputPath)
+	if err != nil {
+		logger.Error("Error downloading file",
+			zap.String("package", packageName),
+			zap.String("version", version),
+			zap.Error(err))
+		return Failed, nil // Return nil error to continue processing
 	}
 
 	if result == Skipped {
-		logger.Warn("File already exists", zap.String("outputPath", outputPath))
+		logger.Info("File already exists", zap.String("outputPath", outputPath))
 	} else {
 		logger.Info("Successfully downloaded file", zap.String("outputPath", outputPath))
 	}

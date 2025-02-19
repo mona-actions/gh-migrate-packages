@@ -141,39 +141,51 @@ func (p *ContainerProvider) Download(logger *zap.Logger, owner, repository, pack
 				RegistryAuth: p.sourceAuthStr,
 			})
 			if err != nil {
-				logger.Error("Failed to pull image", zap.Error(err))
-				return Failed, err
+				logger.Error("Failed to pull image",
+					zap.String("package", packageName),
+					zap.String("version", version),
+					zap.String("image", downloadUrl),
+					zap.Error(err))
+				return Failed, nil // Return nil error to continue processing
 			}
 			defer pullResp.Close()
 
 			// Must read the response to complete the pull
-			_, err = io.Copy(io.Discard, pullResp)
-			if err != nil {
-				logger.Error("Failed to read pull response", zap.Error(err))
-				return Failed, err
+			if _, err = io.Copy(io.Discard, pullResp); err != nil {
+				logger.Error("Failed to read pull response",
+					zap.String("image", downloadUrl),
+					zap.Error(err))
+				return Failed, nil // Return nil error to continue processing
 			}
 
 			// Save image to file
 			saveResp, err := p.client.ImageSave(p.ctx, []string{downloadUrl})
 			if err != nil {
-				logger.Error("Failed to save image", zap.Error(err))
-				return Failed, err
+				logger.Error("Failed to save image",
+					zap.String("image", downloadUrl),
+					zap.String("output", outputPath),
+					zap.Error(err))
+				return Failed, nil // Return nil error to continue processing
 			}
 			defer saveResp.Close()
 
 			// Create output file
 			outputFile, err := os.Create(outputPath)
 			if err != nil {
-				logger.Error("Failed to create output file", zap.Error(err))
-				return Failed, err
+				logger.Error("Failed to create output file",
+					zap.String("path", outputPath),
+					zap.Error(err))
+				return Failed, nil // Return nil error to continue processing
 			}
 			defer outputFile.Close()
 
 			// Copy image to file
-			_, err = io.Copy(outputFile, saveResp)
-			if err != nil {
-				logger.Error("Failed to write image to file", zap.Error(err))
-				return Failed, err
+			if _, err = io.Copy(outputFile, saveResp); err != nil {
+				logger.Error("Failed to write image to file",
+					zap.String("path", outputPath),
+					zap.String("image", downloadUrl),
+					zap.Error(err))
+				return Failed, nil // Return nil error to continue processing
 			}
 			return Success, nil
 		},
