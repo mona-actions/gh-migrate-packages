@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -73,6 +74,28 @@ type NPMProvider struct {
 	BaseProvider
 }
 
+// func NewNPMProvider(logger *zap.Logger, packageType string) Provider {
+// 	sourceHostname := viper.GetString("GHMPKG_SOURCE_HOSTNAME")
+// 	if sourceHostname == "" {
+// 		sourceHostname = "github.com"
+// 	}
+
+// 	targetHostname := viper.GetString("GHMPKG_TARGET_HOSTNAME")
+// 	if targetHostname == "" {
+// 		targetHostname = "github.com"
+// 	}
+
+// 	return &NPMProvider{
+// 		BaseProvider: BaseProvider{
+// 			PackageType:       packageType,
+// 			SourceRegistryUrl: utils.ParseUrl(fmt.Sprintf("https://%s.pkg.%s/", packageType, sourceHostname)),
+// 			TargetRegistryUrl: utils.ParseUrl(fmt.Sprintf("https://%s.pkg.%s/", packageType, targetHostname)),
+// 			SourceHostnameUrl: utils.ParseUrl(fmt.Sprintf("https://%s/", sourceHostname)),
+// 			TargetHostnameUrl: utils.ParseUrl(fmt.Sprintf("https://%s/", targetHostname)),
+// 		},
+// 	}
+// }
+
 func NewNPMProvider(logger *zap.Logger, packageType string) Provider {
 	return &NPMProvider{
 		BaseProvider: NewBaseProvider(packageType, "", "", false),
@@ -103,6 +126,7 @@ func (p *NPMProvider) FetchPackageFiles(logger *zap.Logger, owner, repository, p
 	if resp.StatusCode != http.StatusOK {
 		return nil, Failed, fmt.Errorf("failed to fetch package %s, status: %d, message: %s", fetchUrl, resp.StatusCode, resp.Status)
 	}
+	// print json response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, Failed, err
@@ -111,11 +135,15 @@ func (p *NPMProvider) FetchPackageFiles(logger *zap.Logger, owner, repository, p
 	if err := json.Unmarshal(body, &npmPackage); err != nil {
 		return nil, Failed, err
 	}
-
-	// Generate the expected tarball filename instead of using the SHA
-	filename := fmt.Sprintf("%s-%s.tgz", packageName, version)
+	tarballUrl, err := url.Parse(npmPackage.Versions[version].Dist.Tarball)
+	logger.Info("Tarball url", zap.String("tarballUrl", tarballUrl.String()))
+	if err != nil {
+		return nil, Failed, err
+	}
+	filename := path.Base(tarballUrl.Path)
 	var filenames []string
 	filenames = append(filenames, filename)
+	logger.Info("Package files", zap.String("filename", filename))
 	return filenames, Success, nil
 }
 
@@ -124,11 +152,14 @@ func (p *NPMProvider) Export(logger *zap.Logger, owner string, content interface
 }
 
 func (p *NPMProvider) Download(logger *zap.Logger, owner, repository, packageType, packageName, version, filename string) (ResultState, error) {
+	logger.Info("Downloading package", zap.String("packageName", packageName), zap.String("version", version), zap.String("filename", filename))
 	downloadedFilename := fmt.Sprintf("%s-%s.tgz", packageName, version)
+	logger.Info("Downloaded filename", zap.String("downloadedFilename", downloadedFilename))
 	return p.downloadPackage(
 		logger, owner, repository, packageType, packageName, version, filename, &downloadedFilename,
 		// URL generator function
 		func() (string, error) {
+			logger.Info("Getting download url", zap.String("packageName", packageName), zap.String("version", version), zap.String("filename", filename))
 			return p.GetDownloadUrl(logger, owner, repository, packageName, version, filename)
 		},
 		// Download function
@@ -181,22 +212,42 @@ func (p *NPMProvider) Upload(logger *zap.Logger, owner, repository, packageType,
 				return Failed, fmt.Errorf("failed to write .npmrc: %w", err)
 			}
 
+			// Rename the original tgz file to .orig
+			origTgz := tgz + ".orig"
+			if err := os.Rename(filepath.Join(packageDir, tgz), filepath.Join(packageDir, origTgz)); err != nil {
+				return Failed, fmt.Errorf("failed to rename original package: %w", err)
+			}
+
 			// Extract the tgz file
-			cmd := exec.Command("tar", "-xzf", tgz)
+			cmd := exec.Command("tar", "-xzf", origTgz)
 			cmd.Dir = packageDir
 			if err := cmd.Run(); err != nil {
 				return Failed, fmt.Errorf("failed to extract package: %w", err)
 			}
 
+			// Rename package.json contents
 			packageJson := filepath.Join(packageDir, "package", "package.json")
 			if err := p.Rename(logger, packageJson); err != nil {
 				return Failed, fmt.Errorf("failed to rename package.json: %w", err)
 			}
 
-			// Run npm publish
-			publishCmd := exec.Command("npm", "publish", "--verbose", "--ignore-scripts", "--userconfig", npmrcPath)
-			publishCmd.Dir = filepath.Join(packageDir, "package")
-			publishCmd.Env = append(os.Environ(), "HTTPS_PROXY=")
+			// Repackage the modified contents
+			repackageCmd := exec.Command("tar", "-czf", tgz, "package/")
+			repackageCmd.Dir = packageDir
+			if err := repackageCmd.Run(); err != nil {
+				return Failed, fmt.Errorf("failed to repackage modified contents: %w", err)
+			}
+			// remove the package directory
+			if err := os.RemoveAll(filepath.Join(packageDir, "package")); err != nil {
+				return Failed, fmt.Errorf("failed to remove package directory: %w", err)
+			}
+
+			// Run npm publish with the repackaged file
+			publishCmd := exec.Command("npm", "publish", tgz, "--registry=https://npm.pkg.github.com", "--verbose", "--ignore-scripts", "--no-engine-strict", "--userconfig", npmrcPath)
+			publishCmd.Dir = filepath.Join(packageDir)
+			publishCmd.Env = append(os.Environ(),
+				"HTTPS_PROXY=",
+			)
 
 			// Capture output to npmlog file
 			logFile, err := os.Create(filepath.Join(packageDir, "npmlog"))
@@ -226,6 +277,7 @@ func (p *NPMProvider) GetFetchUrl(logger *zap.Logger, owner, packageName, versio
 func (p *NPMProvider) GetDownloadUrl(logger *zap.Logger, owner, repository, packageName, version, filename string) (string, error) {
 	downloadUrl := *p.SourceRegistryUrl
 	downloadUrl.Path = path.Join(downloadUrl.Path, "download", fmt.Sprintf("@%s", owner), packageName, version, filename)
+	logger.Info("Download url", zap.String("downloadUrl", downloadUrl.String()))
 	return downloadUrl.String(), nil
 }
 

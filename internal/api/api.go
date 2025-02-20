@@ -137,7 +137,7 @@ func retryOperation(operation func() error) error {
 }
 
 func FetchPackages(packageType string) ([]*github.Package, error) {
-	client, err := newGitHubClientWithHostname(viper.GetString("GHMPKG_SOURCE_TOKEN"),"")
+	client, err := newGitHubClientWithHostname(viper.GetString("GHMPKG_SOURCE_TOKEN"), "")
 	ctx := context.WithValue(context.Background(), github.SleepUntilPrimaryRateLimitResetWhenRateLimited, true)
 	state := "active"
 	var packages []*github.Package
@@ -222,36 +222,23 @@ func PackageExists(packageName, packageType string) (bool, error) {
 	client, err := newGitHubClientWithHostname(viper.GetString("GHMPKG_TARGET_TOKEN"), "")
 	ctx := context.WithValue(context.Background(), github.SleepUntilPrimaryRateLimitResetWhenRateLimited, true)
 
+	var exists = true
 	err = retryOperation(func() error {
 		_, response, err := client.Organizations.GetPackage(ctx, viper.GetString("GHMPKG_TARGET_ORGANIZATION"), packageType, packageName)
-		if response.StatusCode == http.StatusNotFound {
-			return fmt.Errorf("package %s does not exist", packageName)
-		}
 
+		if response.StatusCode != http.StatusOK {
+			exists = false
+			return nil
+		}
 		return err
 	})
 
 	if err != nil {
 		return false, err
 	}
+	if !exists {
+		return false, nil
+	}
 
 	return true, nil
-}
-
-func DoesPackageExist(owner string, pkg *github.Package) (*github.Package, error) {
-	client, err := newGitHubClientWithHostname(viper.GetString("GHMPKG_TARGET_TOKEN"), getHostname(""))
-	ctx := context.WithValue(context.Background(), github.SleepUntilPrimaryRateLimitResetWhenRateLimited, true)
-	var dstPkg *github.Package
-	var response *github.Response
-
-	err = retryOperation(func() error {
-		dstPkg, response, err = client.Organizations.GetPackage(ctx, owner, *pkg.PackageType, *pkg.Name)
-		if response.StatusCode == http.StatusNotFound {
-			return fmt.Errorf("package %s does not exist", *pkg.Name)
-		}
-
-		return err
-	})
-
-	return dstPkg, err
 }

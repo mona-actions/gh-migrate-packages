@@ -1,12 +1,13 @@
 package utils
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"	
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -241,6 +242,12 @@ func UploadFile(url, inputPath, token string) (*http.Response, error) {
 		return nil, fmt.Errorf("failed to get file stats: %v", err)
 	}
 
+	// Read the entire file into memory
+	content, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read file: %v", err)
+	}
+
 	client := &http.Client{}
 
 	for {
@@ -251,8 +258,8 @@ func UploadFile(url, inputPath, token string) (*http.Response, error) {
 			continue
 		}
 
-		// Create a new HTTP request
-		req, err := http.NewRequest("PUT", url, file)
+		// Create a new HTTP request using the content buffer
+		req, err := http.NewRequest("PUT", url, bytes.NewReader(content))
 		if err != nil {
 			return nil, fmt.Errorf("failed to create request: %v", err)
 		}
@@ -260,9 +267,9 @@ func UploadFile(url, inputPath, token string) (*http.Response, error) {
 		// Add the authorization header
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 		req.Header.Set("Content-Length", fmt.Sprintf("%d", stat.Size()))
-		if strings.HasSuffix(file.Name(), ".jar") {
+		if strings.HasSuffix(inputPath, ".jar") {
 			req.Header.Set("Content-Type", "application/java-archive")
-		} else if strings.HasSuffix(file.Name(), ".pom") {
+		} else if strings.HasSuffix(inputPath, ".pom") {
 			req.Header.Set("Content-Type", "application/xml")
 		} else {
 			req.Header.Set("Content-Type", "application/octet-stream")
@@ -273,8 +280,6 @@ func UploadFile(url, inputPath, token string) (*http.Response, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to perform request: %v", err)
 		}
-		defer resp.Body.Close()
-		time.Sleep(500 * time.Millisecond)
 		return resp, nil
 	}
 }
@@ -311,9 +316,9 @@ func FileExists(path string) bool {
 
 func Contains(slice []string, item string) bool {
 	for _, s := range slice {
-			if s == item {
-					return true
-			}
+		if s == item {
+			return true
+		}
 	}
 	return false
 }
@@ -321,24 +326,24 @@ func Contains(slice []string, item string) bool {
 func FindMostRecentFile(pattern string) (string, error) {
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
-			return "", err
+		return "", err
 	}
-	
+
 	if len(matches) == 0 {
-			return "", fmt.Errorf("no files found matching pattern: %s", pattern)
+		return "", fmt.Errorf("no files found matching pattern: %s", pattern)
 	}
 
 	// Sort files by modification time, most recent first
 	sort.Slice(matches, func(i, j int) bool {
-			iInfo, err := os.Stat(matches[i])
-			if err != nil {
-					return false
-			}
-			jInfo, err := os.Stat(matches[j])
-			if err != nil {
-					return false
-			}
-			return iInfo.ModTime().After(jInfo.ModTime())
+		iInfo, err := os.Stat(matches[i])
+		if err != nil {
+			return false
+		}
+		jInfo, err := os.Stat(matches[j])
+		if err != nil {
+			return false
+		}
+		return iInfo.ModTime().After(jInfo.ModTime())
 	})
 
 	return matches[0], nil

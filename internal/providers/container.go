@@ -19,6 +19,11 @@ import (
 	"go.uber.org/zap"
 )
 
+// Package providers implements different package type handlers for container registries.
+
+// ContainerProvider handles container image operations between Docker registries.
+// It supports pulling images from a source registry and pushing them to a target registry,
+// while managing authentication and image metadata.
 type ContainerProvider struct {
 	BaseProvider
 	ctx           context.Context
@@ -28,6 +33,10 @@ type ContainerProvider struct {
 	recreatedShas map[string]string
 }
 
+// Constructor
+// ----------
+
+// NewContainerProvider creates a new ContainerProvider instance.
 func NewContainerProvider(logger *zap.Logger, packageType string) Provider {
 	return &ContainerProvider{
 		BaseProvider:  NewBaseProvider(packageType, "", "", true),
@@ -35,7 +44,10 @@ func NewContainerProvider(logger *zap.Logger, packageType string) Provider {
 	}
 }
 
-// Helper function to encode auth config to base64
+// Authentication
+// -------------
+
+// encodeAuthToBase64 converts Docker registry authentication config to base64 encoded string.
 func encodeAuthToBase64(auth registry.AuthConfig) (string, error) {
 	authBytes, err := json.Marshal(auth)
 	if err != nil {
@@ -44,6 +56,7 @@ func encodeAuthToBase64(auth registry.AuthConfig) (string, error) {
 	return base64.URLEncoding.EncodeToString(authBytes), nil
 }
 
+// login authenticates with a Docker registry and returns the encoded auth string.
 func (p *ContainerProvider) login(logger *zap.Logger, addr, username, password string) (string, error) {
 	auth := registry.AuthConfig{
 		Username:      username,
@@ -69,7 +82,16 @@ func (p *ContainerProvider) login(logger *zap.Logger, addr, username, password s
 	return authStr, nil
 }
 
+// Connect initializes the Docker client and authenticates with both source and target registries.
 func (p *ContainerProvider) Connect(logger *zap.Logger) error {
+	// Add validation for required environment variables
+	sourceOrg := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
+	sourceToken := viper.GetString("GHMPKG_SOURCE_TOKEN")
+
+	if sourceOrg == "" || sourceToken == "" {
+		return fmt.Errorf("missing required environment variables: GHMPKG_SOURCE_ORGANIZATION and/or GHMPKG_SOURCE_TOKEN")
+	}
+
 	ctx := context.Background()
 
 	// Create Docker client
@@ -82,8 +104,8 @@ func (p *ContainerProvider) Connect(logger *zap.Logger) error {
 	p.ctx = ctx
 	p.client = client
 
-	sourceOrg := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
-	sourceToken := viper.GetString("GHMPKG_SOURCE_TOKEN")
+	sourceOrg = viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
+	sourceToken = viper.GetString("GHMPKG_SOURCE_TOKEN")
 	sourceAuthStr, err := p.login(logger, p.SourceRegistryUrl.String(), sourceOrg, sourceToken)
 	if err != nil {
 		logger.Error("Failed to login to source registry", zap.Error(err))
@@ -103,18 +125,24 @@ func (p *ContainerProvider) Connect(logger *zap.Logger) error {
 	return nil
 }
 
+// Core Operations
+// --------------
+
+// FetchPackageFiles retrieves the list of container image tags for a package.
 func (p *ContainerProvider) FetchPackageFiles(logger *zap.Logger, owner, repository, packageType, packageName, version string, metadata *github.PackageMetadata) ([]string, ResultState, error) {
 	filenames := []string{}
 	for _, tag := range metadata.Container.Tags {
 		filenames = append(filenames, fmt.Sprintf("%s:%s", packageName, tag))
 	}
+	// Reverse the slice to upload the latest version last
+	for i := 0; i < len(filenames)/2; i++ {
+		j := len(filenames) - 1 - i
+		filenames[i], filenames[j] = filenames[j], filenames[i]
+	}
 	return filenames, Success, nil
 }
 
-func (p *ContainerProvider) Export(logger *zap.Logger, owner string, content interface{}) error {
-	return p.BaseProvider.Export(logger, owner, content)
-}
-
+// Download pulls a container image from the source registry and saves it locally.
 func (p *ContainerProvider) Download(logger *zap.Logger, owner, repository, packageType, packageName, version, filename string) (ResultState, error) {
 	parts := strings.Split(filename, ":")
 	tag := parts[1]
@@ -170,6 +198,7 @@ func (p *ContainerProvider) Download(logger *zap.Logger, owner, repository, pack
 	)
 }
 
+// Rename creates a new image with updated metadata for the target registry.
 func (p *ContainerProvider) Rename(logger *zap.Logger, owner, repository, packageName, version, filename string) error {
 	// Tag image for target registry
 	sourceOrg := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
@@ -241,6 +270,7 @@ func (p *ContainerProvider) Rename(logger *zap.Logger, owner, repository, packag
 	return nil
 }
 
+// Upload pushes a container image to the target registry.
 func (p *ContainerProvider) Upload(logger *zap.Logger, owner, repository, packageType, packageName, version, filename string) (ResultState, error) {
 	return p.uploadPackage(
 		logger, owner, repository, packageType, packageName, version, filename,
@@ -249,6 +279,7 @@ func (p *ContainerProvider) Upload(logger *zap.Logger, owner, repository, packag
 		},
 		func(uploadUrl, packageDir string) (ResultState, error) {
 			if err := p.Rename(logger, owner, repository, packageName, version, filename); err != nil {
+
 				logger.Error("Failed to rename image", zap.Error(err))
 				return Failed, err
 			}
@@ -278,20 +309,34 @@ func (p *ContainerProvider) Upload(logger *zap.Logger, owner, repository, packag
 	)
 }
 
+// URL Generation
+// -------------
+
+// GetFetchUrl generates the URL for fetching package metadata.
 func (p *ContainerProvider) GetFetchUrl(logger *zap.Logger, owner, packageName, version string) (string, error) {
 	fetchUrl := *p.SourceRegistryUrl
 	fetchUrl.Path = path.Join(fetchUrl.Path, fmt.Sprintf("@%s", owner), packageName)
 	return fetchUrl.String(), nil
 }
 
+// GetDownloadUrl generates the URL for downloading a container image from the source registry.
 func (p *ContainerProvider) GetDownloadUrl(logger *zap.Logger, owner, repository, packageName, version, filename string) (string, error) {
 	downloadUrl := *p.SourceRegistryUrl
 	downloadUrl.Path = path.Join(downloadUrl.Path, owner, filename)
 	return downloadUrl.String(), nil
 }
 
+// GetUploadUrl generates the URL for uploading a container image to the target registry.
 func (p *ContainerProvider) GetUploadUrl(logger *zap.Logger, owner, repository, packageName, version, filename string) (string, error) {
 	uploadUrl := *p.TargetRegistryUrl
 	uploadUrl.Path = path.Join(uploadUrl.Path, owner, filename)
 	return uploadUrl.String(), nil
+}
+
+// Required Interface Methods
+// ------------------------
+
+// Export implements the Provider interface Export method.
+func (p *ContainerProvider) Export(logger *zap.Logger, owner string, content interface{}) error {
+	return p.BaseProvider.Export(logger, owner, content)
 }

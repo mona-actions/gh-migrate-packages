@@ -14,20 +14,25 @@ import (
 	"go.uber.org/zap"
 )
 
+// RubyGemsProvider handles operations for Ruby Gem packages
 type RubyGemsProvider struct {
 	BaseProvider
 }
 
+// NewRubyGemsProvider creates a new instance of RubyGemsProvider
 func NewRubyGemsProvider(logger *zap.Logger, packageType string) Provider {
 	return &RubyGemsProvider{
 		BaseProvider: NewBaseProvider(packageType, "", "", false),
 	}
 }
 
+// Connect implements the Provider interface
+// Currently a no-op for RubyGems
 func (p *RubyGemsProvider) Connect(logger *zap.Logger) error {
 	return nil
 }
 
+// FetchPackageFiles returns the expected filenames for a given package version
 func (p *RubyGemsProvider) FetchPackageFiles(logger *zap.Logger, owner, repository, packageType, packageName, version string, metadata *github.PackageMetadata) ([]string, ResultState, error) {
 	filenames := []string{
 		fmt.Sprintf("%s-%s.gem", packageName, version),
@@ -35,10 +40,12 @@ func (p *RubyGemsProvider) FetchPackageFiles(logger *zap.Logger, owner, reposito
 	return filenames, Success, nil
 }
 
+// Export implements the Provider interface by delegating to BaseProvider
 func (p *RubyGemsProvider) Export(logger *zap.Logger, owner string, content interface{}) error {
 	return p.BaseProvider.Export(logger, owner, content)
 }
 
+// Download retrieves a Ruby Gem package from the source registry
 func (p *RubyGemsProvider) Download(logger *zap.Logger, owner, repository, packageType, packageName, version, filename string) (ResultState, error) {
 	return p.downloadPackage(
 		logger, owner, repository, packageType, packageName, version, filename, nil,
@@ -71,7 +78,39 @@ func (p *RubyGemsProvider) Rename(logger *zap.Logger, repository, filename strin
 	return nil
 }
 
+// ensureGemCredentials sets up the necessary credentials for gem operations
+func (p *RubyGemsProvider) ensureGemCredentials(logger *zap.Logger) error {
+	// Check if credentials file exists
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		logger.Error("failed to get home directory", zap.Error(err))
+		return err
+	}
+
+	credentialsDir := filepath.Join(homeDir, ".gem")
+	if err := os.MkdirAll(credentialsDir, 0700); err != nil {
+		logger.Error("failed to create credentials directory", zap.Error(err))
+		return err
+	}
+
+	// Create or update credentials file
+	credentialsFile := filepath.Join(credentialsDir, "credentials")
+	content := fmt.Sprintf("---\n:github: %s\n", viper.GetString("GHMPKG_TARGET_TOKEN"))
+
+	if err := os.WriteFile(credentialsFile, []byte(content), 0600); err != nil {
+		logger.Error("failed to write credentials file", zap.Error(err))
+		return err
+	}
+
+	return nil
+}
+
+// push publishes a gem to the target registry
 func (p *RubyGemsProvider) push(owner, dir, gemFile string) error {
+	// Ensure gem credentials are set up
+	if err := p.ensureGemCredentials(nil); err != nil {
+		return fmt.Errorf("failed to setup gem credentials: %w", err)
+	}
 	// Run gem publish
 	pushUrl := *p.TargetRegistryUrl
 	pushUrl.Path = path.Join(pushUrl.Path, owner)
@@ -95,6 +134,7 @@ func (p *RubyGemsProvider) push(owner, dir, gemFile string) error {
 	return nil
 }
 
+// Upload processes and publishes a Ruby Gem to the target registry
 func (p *RubyGemsProvider) Upload(logger *zap.Logger, owner, repository, packageType, packageName, version, filename string) (ResultState, error) {
 	return p.uploadPackage(
 		logger, owner, repository, packageType, packageName, version, filename,
@@ -102,7 +142,7 @@ func (p *RubyGemsProvider) Upload(logger *zap.Logger, owner, repository, package
 			return p.GetUploadUrl(logger, owner, repository, packageName, version, filename)
 		},
 		func(uploadUrl, packageDir string) (ResultState, error) {
-			// Extract the tgz file
+			// Extract the gem file
 			cmd := exec.Command("gem", "unpack", filename)
 			cmd.Dir = packageDir
 			if err := cmd.Run(); err != nil {
@@ -116,7 +156,8 @@ func (p *RubyGemsProvider) Upload(logger *zap.Logger, owner, repository, package
 				packageName,
 			}
 			for _, possibleGemFile := range possibleGemFiles {
-				gemspecFile := filepath.Join(gemUnpackedDir, fmt.Sprintf("%s.gemspec", possibleGemFile))
+				var gemSpecFileName = fmt.Sprintf("%s.gemspec", possibleGemFile)
+				gemspecFile := filepath.Join(gemUnpackedDir, gemSpecFileName)
 
 				if !utils.FileExists(gemspecFile) {
 					logger.Warn("Gemspec file not found", zap.String("gemFile", gemspecFile))
@@ -128,7 +169,7 @@ func (p *RubyGemsProvider) Upload(logger *zap.Logger, owner, repository, package
 				}
 
 				// Run gem publish
-				buildCmd := exec.Command("gem", "build", gemspecFile)
+				buildCmd := exec.Command("gem", "build", gemSpecFileName)
 				buildCmd.Dir = gemUnpackedDir
 
 				// Capture output to gemlog file
@@ -164,12 +205,14 @@ func (p *RubyGemsProvider) Upload(logger *zap.Logger, owner, repository, package
 	)
 }
 
+// GetDownloadUrl generates the URL for downloading a gem from the source registry
 func (p *RubyGemsProvider) GetDownloadUrl(logger *zap.Logger, owner, repository, packageName, version, filename string) (string, error) {
 	downloadUrl := *p.SourceRegistryUrl
 	downloadUrl.Path = path.Join(downloadUrl.Path, owner, "gems", filename)
 	return downloadUrl.String(), nil
 }
 
+// GetUploadUrl generates the URL for uploading a gem to the target registry
 func (p *RubyGemsProvider) GetUploadUrl(logger *zap.Logger, owner, repository, packageName, version string, filename string) (string, error) {
 	uploadUrl := *p.TargetRegistryUrl
 	uploadUrl.Path = path.Join(uploadUrl.Path, owner, repository, packageName, version, filename)

@@ -66,12 +66,12 @@ func ShowConnectionStatus(actionType string) {
 	hostname := getNormalizedEndpoint(endpoint)
 
 	fmt.Println(getHostnameMessage(hostname))
-	fmt.Println(getProxyStatus())
+	//fmt.Println(getProxyStatus())
 }
 
 func getNormalizedEndpoint(key string) string {
 	hostname := viper.GetString(key)
-	if hostname != ""  {
+	if hostname != "" {
 		hostname = strings.TrimPrefix(hostname, "http://")
 		hostname = strings.TrimPrefix(hostname, "https://")
 		hostname = strings.TrimSuffix(hostname, "/api/v3")

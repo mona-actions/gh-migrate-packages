@@ -171,7 +171,7 @@ func (p *BaseProvider) downloadPackage(
 	if downloadedFilename == nil {
 		downloadedFilename = &filename
 	}
-	outputPath := filepath.Join("packages", owner, repository, packageType, packageName, version, *downloadedFilename)
+	outputPath := filepath.Join("migration-packages", "packages", owner, packageType, packageName, version, *downloadedFilename)
 
 	if utils.FileExists(outputPath) {
 		logger.Warn("File already exists", zap.String("outputPath", outputPath))
@@ -210,11 +210,14 @@ func (p *BaseProvider) uploadPackage(
 	getUrl func() (string, error),
 	upload func(string, string) (ResultState, error),
 ) (ResultState, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return Failed, err
+	var packageDir string
+	if packageType == "container" {
+		parts := strings.Split(filename, ":")
+		tag := parts[1]
+		packageDir = filepath.Join("migration-packages", "packages", viper.GetString("GHMPKG_SOURCE_ORGANIZATION"), packageType, packageName, tag)
+	} else {
+		packageDir = filepath.Join("migration-packages", "packages", viper.GetString("GHMPKG_SOURCE_ORGANIZATION"), packageType, packageName, version)
 	}
-	packageDir := filepath.Join(dir, "packages", viper.GetString("GHMPKG_SOURCE_ORGANIZATION"), repository, packageType, packageName, version)
 
 	if !utils.FileExists(packageDir) {
 		logger.Warn("Package directory does not exist", zap.String("packageDir", packageDir))
@@ -223,21 +226,21 @@ func (p *BaseProvider) uploadPackage(
 
 	uploadUrl, err := getUrl()
 	if err != nil {
-		logger.Error("Error getting download URL", zap.Error(err))
+		logger.Error("Error getting upload URL", zap.Error(err))
 		return Failed, err
 	}
 
-	logger.Info("Downloading file", zap.String("url", uploadUrl))
+	logger.Info("Uploading file", zap.String("url", uploadUrl))
 	var result ResultState
 	if result, err = upload(uploadUrl, packageDir); err != nil {
-		logger.Error("Error downloading file", zap.Error(err))
+		logger.Error("Error uploading file", zap.Error(err))
 		return Failed, err
 	}
 
 	if result == Skipped {
 		logger.Warn("File already exists", zap.String("packagePath", packageDir))
 	} else {
-		logger.Info("Successfully downloaded file", zap.String("packageDir", packageDir))
+		logger.Info("Successfully uploaded file", zap.String("packageDir", packageDir))
 	}
 	return Success, nil
 }

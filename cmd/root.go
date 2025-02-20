@@ -178,11 +178,18 @@ func initConfig() {
 	// Read from environment
 	viper.AutomaticEnv()
 
-		// Create a timestamp for the log file name
+	// Create a timestamp for the log file name
 	timestamp := time.Now().Format("2006-01-02T15-04-05")
 
-	// Define the log file path
-	logFilePath := fmt.Sprintf("./migration-%s.log", timestamp)
+	// Define the log directory and file path
+	logDir := "./migration-packages/logs"
+	logFilePath := fmt.Sprintf("%s/%s.log", logDir, timestamp)
+
+	// Create log directory if it doesn't exist
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create log directory: %v\n", err)
+		os.Exit(1)
+	}
 
 	// Create the log file
 	logFile, err := os.Create(logFilePath)

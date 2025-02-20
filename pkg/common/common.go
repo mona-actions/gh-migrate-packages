@@ -11,6 +11,7 @@ import (
 	"go.uber.org/zap"
 )
 
+var SUPPORTED_PACKAGE_TYPES = []string{"container", "rubygems", "maven", "npm", "nuget"}
 const ARE_YOU_SURE_YOU_EXPORTED = "Are you sure you exported first? gh migrate-packages export --help"
 
 type Report struct {
@@ -107,15 +108,15 @@ type ProcessCallback func(
 func ProcessPackages(logger *zap.Logger, packages [][]string, fn ProcessCallback, skipIfExists bool) (*Report, error) {
 
 	report := NewReport()
-	desiredPackageType := viper.GetString("PACKAGE_TYPE")
+	desiredPackageType := viper.GetString("GHMPKG_PACKAGE_TYPE")
 	var provider providers.Provider
 	var err error
 
 	pkgs := utils.GetListOfUniqueEntries(packages, []int{0, 1, 2, 3})
+
 	for i, pkg := range pkgs {
-		if i == 0 {
-			continue
-		}
+		logger.Info("Processing package", zap.Int("index", i), zap.String("org", pkg[0]), zap.String("repo", pkg[1]), zap.String("type", pkg[2]), zap.String("name", pkg[3]))
+
 		owner := pkg[0]
 		repository := pkg[1]
 		packageType := pkg[2]
@@ -165,8 +166,8 @@ func ProcessPackages(logger *zap.Logger, packages [][]string, fn ProcessCallback
 		versionFilters := map[string]string{
 			"0": owner,       // org
 			"1": repository,  // repo
-			"2": packageType, // package name
-			"3": packageName,
+			"2": packageType, // package type
+			"3": packageName, // package name
 		}
 		versions := utils.GetFlatListOfColumn(packages, versionFilters, 4)
 
@@ -175,10 +176,10 @@ func ProcessPackages(logger *zap.Logger, packages [][]string, fn ProcessCallback
 		for i := len(versions) - 1; i >= 0; i-- {
 			version := versions[i]
 			fileFilters := map[string]string{
-				"0": owner,       // org
-				"1": repository,  // repo
-				"2": packageType, // package name
-				"3": packageName, // version
+				"0": owner,
+				"1": repository,
+				"2": packageType,
+				"3": packageName,
 				"4": version,
 			}
 			filenames := utils.GetFlatListOfColumn(packages, fileFilters, 5)

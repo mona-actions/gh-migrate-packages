@@ -2,6 +2,7 @@ package pull
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -15,7 +16,7 @@ import (
 	"go.uber.org/zap"
 )
 
-var SUPPORTED_PACKAGE_TYPES = []string{"container", "rubygems", "maven", "npm", "nuget"}
+var SUPPORTED_PACKAGE_TYPES = common.SUPPORTED_PACKAGE_TYPES
 
 func Download(logger *zap.Logger, provider providers.Provider, report *common.Report, repository, packageType, packageName, version string, filenames []string) error {
 	owner := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
@@ -26,6 +27,22 @@ func Download(logger *zap.Logger, provider providers.Provider, report *common.Re
 		zap.String("packageName", packageName),
 		zap.String("version", version),
 	}
+
+	logger.Info("Download function entry",
+		zap.String("packageType", packageType),
+		zap.String("packageName", packageName),
+		zap.String("version", version),
+		zap.Strings("filenames", filenames),
+		zap.String("owner", owner),
+		zap.String("repository", repository))
+
+	// Add provider type logging
+	logger.Info("Using provider",
+		zap.String("packageType", packageType),
+		zap.String("providerType", fmt.Sprintf("%T", provider)))
+
+	pterm.Info.Println(fmt.Sprintf("📦 package: %s", packageName))
+	pterm.Info.Println(fmt.Sprintf("🗃️ version: %s", version))
 
 	// Create error channel to collect errors from workers
 	errChan := make(chan error, len(filenames))
@@ -49,12 +66,66 @@ func Download(logger *zap.Logger, provider providers.Provider, report *common.Re
 				<-sem
 			}()
 
-			logger.Info("Downloading package", append(zapFields, zap.String("filename", filename))...)
-			if result, err := provider.Download(logger, owner, repository, packageType, packageName, version, filename); err != nil {
-				logger.Error("Failed to download package", append(zapFields, zap.String("filename", filename), zap.Error(err))...)
-				errChan <- fmt.Errorf("failed to download %s: %w", filename, err)
+			logger.Info("Starting download for file",
+				zap.String("packageType", packageType),
+				zap.String("packageName", packageName),
+				zap.String("version", version),
+				zap.String("filename", filename))
+
+			if packageType == "container" {
+				// Extract semantic version from filename for containers
+				semanticVersion := strings.Split(filename, ":")[1]
+				logger.Info("Processing container package",
+					zap.String("packageName", packageName),
+					zap.String("version", version),
+					zap.String("semanticVersion", semanticVersion),
+					zap.String("filename", filename),
+					zap.String("owner", owner),
+					zap.String("repository", repository))
+
+				if result, err := provider.Download(logger, owner, repository, packageType, packageName, semanticVersion, filename); err != nil {
+					logger.Error("Failed to download package", append(zapFields,
+						zap.String("filename", filename),
+						zap.String("semanticVersion", semanticVersion),
+						zap.Error(err))...)
+					pterm.Error.Println(fmt.Sprintf("    ❌ Failed to download: %s", filename))
+					errChan <- fmt.Errorf("failed to download %s: %w", filename, err)
+				} else {
+					logger.Info("Download result",
+						zap.String("packageName", packageName),
+						zap.String("version", semanticVersion),
+						zap.String("filename", filename),
+						zap.Any("result", result))
+					report.IncFiles(result)
+					if result == providers.Success {
+						pterm.Success.Println(fmt.Sprintf("✅ %s", filename))
+					}
+				}
 			} else {
-				report.IncFiles(result)
+				logger.Info("Attempting non-container download",
+					zap.String("packageType", packageType),
+					zap.String("packageName", packageName),
+					zap.String("version", version),
+					zap.String("filename", filename))
+
+				result, err := provider.Download(logger, owner, repository, packageType, packageName, version, filename)
+				if err != nil {
+					logger.Error("Failed to download package", append(zapFields,
+						zap.String("filename", filename),
+						zap.Error(err))...)
+					pterm.Error.Println(fmt.Sprintf("❌ Failed to download: %s", filename))
+					errChan <- fmt.Errorf("failed to download %s: %w", filename, err)
+				} else {
+					logger.Info("Download completed",
+						zap.String("packageName", packageName),
+						zap.String("version", version),
+						zap.String("filename", filename),
+						zap.Any("result", result))
+					report.IncFiles(result)
+					if result == providers.Success {
+						pterm.Success.Println(fmt.Sprintf("✅ %s", filename))
+					}
+				}
 			}
 		}(filename)
 	}
@@ -80,7 +151,19 @@ func Pull(logger *zap.Logger) error {
 	startTime := time.Now()
 	owner := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
 	desiredPackageType := viper.GetString("GHMPKG_PACKAGE_TYPES")
-	spinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Downloading packages from source org: %s", owner))
+
+	logger.Info("Starting pull process",
+		zap.String("owner", owner),
+		zap.String("desiredPackageType", desiredPackageType))
+
+	pterm.Info.Println("Starting pull process...")
+	spinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Pulling packages from source org: %s", owner))
+
+	// Add directory existence check
+	if _, err := os.Stat("./migration-packages"); os.IsNotExist(err) {
+		spinner.Fail("migration-packages directory not found")
+		return fmt.Errorf("migration-packages directory not found: %w", err)
+	}
 
 	// Handle either specific package type or all package types
 	packageTypes := SUPPORTED_PACKAGE_TYPES
@@ -93,36 +176,41 @@ func Pull(logger *zap.Logger) error {
 	}
 
 	var allPackages [][]string
+	packageStats := make(map[string][]string)
+
 	for _, pkgType := range packageTypes {
-		// Add debug logging for package type processing
-		logger.Debug("Processing package type",
-			zap.String("type", pkgType),
-			zap.String("owner", owner))
+		logger.Info("Processing package type", zap.String("type", pkgType))
+		pterm.Info.Println(fmt.Sprintf("Processing %s packages...", pkgType))
+
+		// Check if package type directory exists
+		pkgTypeDir := fmt.Sprintf("./migration-packages/export/%s", pkgType)
+		if _, err := os.Stat(pkgTypeDir); os.IsNotExist(err) {
+			logger.Warn("Package type directory not found",
+				zap.String("packageType", pkgType),
+				zap.String("directory", pkgTypeDir))
+			continue
+		}
 
 		// Look for the most recent CSV file in the package type directory
-		pattern := fmt.Sprintf("./migration-packages/%s/*_%s_%s_packages.csv", pkgType, owner, pkgType)
-		logger.Debug("Searching for CSV with pattern",
-			zap.String("pattern", pattern))
+		pattern := fmt.Sprintf("./migration-packages/export/%s/*_%s_%s_packages.csv", pkgType, owner, pkgType)
+		logger.Info("Searching for CSV with pattern", zap.String("pattern", pattern))
 
 		matches, err := utils.FindMostRecentFile(pattern)
 		if err != nil {
 			// Try alternate pattern without owner in filename
-			altPattern := fmt.Sprintf("./migration-packages/%s/*_%s_packages.csv", pkgType, pkgType)
-			logger.Debug("Trying alternate pattern",
+			altPattern := fmt.Sprintf("./migration-packages/export/%s/*_%s_packages.csv", pkgType, pkgType)
+			logger.Info("Trying alternate pattern",
 				zap.String("altPattern", altPattern))
 
 			matches, err = utils.FindMostRecentFile(altPattern)
 			if err != nil {
 				logger.Warn("No export file found for package type",
 					zap.String("packageType", pkgType),
-					zap.String("pattern", pattern),
-					zap.String("altPattern", altPattern),
 					zap.Error(err))
 				continue
 			}
 		}
 
-		// Add logging for found CSV file
 		logger.Info("Found CSV file",
 			zap.String("packageType", pkgType),
 			zap.String("file", matches))
@@ -133,60 +221,91 @@ func Pull(logger *zap.Logger) error {
 			return err
 		}
 
-		// Add logging for package count
-		logger.Info("Read packages from CSV",
+		// Log the content of the first few rows to verify data
+		logger.Info("CSV content sample",
 			zap.String("packageType", pkgType),
-			zap.Int("count", len(packages)))
+			zap.Int("totalRows", len(packages)),
+			zap.Any("firstRows", packages[:min(len(packages), 3)]))
 
-		allPackages = append(allPackages, packages...)
+		if len(packages) <= 1 {
+			pterm.Warning.Println(fmt.Sprintf("No package data found in CSV for %s", pkgType))
+			continue
+		}
+
+		allPackages = append(allPackages, packages[1:]...)
+		for _, pkg := range packages[1:] {
+			if _, ok := packageStats[pkgType]; ok {
+				if utils.Contains(packageStats[pkgType], pkg[3]) {
+					continue
+				} else {
+					packageStats[pkgType] = append(packageStats[pkgType], pkg[3])
+				}
+			} else {
+				packageStats[pkgType] = []string{pkg[3]}
+			}
+		}
+
+		pterm.Info.Println(fmt.Sprintf("Found %d packages in CSV for %s", len(packageStats[pkgType]), pkgType))
 	}
 
-	// Add logging for total packages found
-	logger.Info("Total packages to process",
-		zap.Int("count", len(allPackages)))
+	// Debug logging before processing
+	logger.Info("Final package list before processing",
+		zap.Int("totalPackages", len(allPackages)))
+
+	for i, pkg := range allPackages {
+		logger.Info("Package in final list",
+			zap.Int("index", i),
+			zap.String("org", pkg[0]),
+			zap.String("repo", pkg[1]),
+			zap.String("type", pkg[2]),
+			zap.String("name", pkg[3]),
+			zap.String("version", pkg[4]),
+			zap.String("filename", pkg[5]))
+	}
 
 	if len(allPackages) == 0 {
 		spinner.Fail("No package export files found")
 		return fmt.Errorf("no package export files found")
 	}
 
-	// Initialize report before processing packages
-	report := common.NewReport()
-	var err error
-
-	if report, err = common.ProcessPackages(logger, allPackages, Download, false); err != nil {
+	report, err := common.ProcessPackages(logger, allPackages, Download, false)
+	if err != nil {
 		spinner.Fail(fmt.Sprintf("Error pulling package: %v", err))
 		return err
 	}
 
-	spinner.Success("Packages downloaded successfully")
+	spinner.Success("Pull completed")
 
-	// Add debug logging right before summary
-	logger.Debug("Report status before summary",
-		zap.Int("total_success", report.GetTotalSuccess()),
-		zap.Int("total_failures", report.GetTotalFailures()))
-
-	// Calculate elapsed time
-	elapsed := time.Since(startTime)
-	hours := int(elapsed.Hours())
-	minutes := int(elapsed.Minutes()) % 60
-	seconds := int(elapsed.Seconds()) % 60
+	// Calculate duration
+	duration := time.Since(startTime)
+	hours := int(duration.Hours())
+	minutes := int(duration.Minutes()) % 60
+	seconds := int(duration.Seconds()) % 60
 
 	// Print detailed summary
-	fmt.Println("\n📊 Summary:")
-	fmt.Printf("✅ Successfully processed: %d packages\n", report.GetTotalSuccess())
+	fmt.Println("\n📊 Pull Summary:")
+	fmt.Printf("✅ Successfully processed: %d packages\n", report.PackageSuccess)
+	fmt.Printf("❌ Failed: %d packages\n", report.PackagesFailed)
 
-	// Print package type counts
 	for _, pkgType := range SUPPORTED_PACKAGE_TYPES {
-		count := report.GetSuccessByType(pkgType)
-		if count > 0 {
-			fmt.Printf("  📦 %s: %d\n", pkgType, count)
+		if count := len(packageStats[pkgType]); count > 0 {
+			emoji := "📦"
+			name := pkgType
+			fmt.Printf("  %s %s: %d\n", emoji, name, count)
 		}
 	}
 
-	fmt.Printf("❌ Failed: %d packages\n", report.GetTotalFailures())
-	fmt.Printf("📁 Output directory: package-migration/(%s)\n", strings.Join(packageTypes, ", "))
-	fmt.Printf("🕐 Total time: %dh %dm %ds\n", hours, minutes, seconds)
+	fmt.Println("📁 Output directory: migration-packages/packages")
+	fmt.Printf("🕐 Total time: %dh %dm %ds\n\n", hours, minutes, seconds)
+	fmt.Println("✅ Pull completed successfully!")
 
 	return nil
+}
+
+// Helper function for min
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
