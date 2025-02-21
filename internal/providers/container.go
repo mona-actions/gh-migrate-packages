@@ -200,6 +200,11 @@ func (p *ContainerProvider) Download(logger *zap.Logger, owner, repository, pack
 
 // Rename creates a new image with updated metadata for the target registry.
 func (p *ContainerProvider) Rename(logger *zap.Logger, owner, repository, packageName, version, filename string) error {
+	// Skip if source and target organizations are the same
+	if p.CheckOrganizationsMatch(logger) {
+		return nil
+	}
+
 	// Tag image for target registry
 	sourceOrg := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
 	targetOrg := viper.GetString("GHMPKG_TARGET_ORGANIZATION")
