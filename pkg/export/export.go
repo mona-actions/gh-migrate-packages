@@ -16,7 +16,6 @@ import (
 )
 
 // var SUPPORTED_PACKAGE_TYPES = []string{"maven", "npm", "container", "rubygems", "nuget"}
-var SUPPORTED_PACKAGE_TYPES = []string{"maven", "npm", "container", "rubygems", "nuget"}
 
 func Export(logger *zap.Logger) error {
 	report := common.NewReport()
@@ -40,7 +39,7 @@ func Export(logger *zap.Logger) error {
 		// Validate each desired package type against supported types
 		for _, desired := range desiredPackageTypes {
 			isSupported := false
-			for _, supported := range SUPPORTED_PACKAGE_TYPES {
+			for _, supported := range common.SUPPORTED_PACKAGE_TYPES {
 				if desired == supported {
 					isSupported = true
 					packageTypes = append(packageTypes, desired)
@@ -53,7 +52,7 @@ func Export(logger *zap.Logger) error {
 			}
 		}
 	} else {
-		packageTypes = SUPPORTED_PACKAGE_TYPES // Use all supported types if none specified
+		packageTypes = common.SUPPORTED_PACKAGE_TYPES // Use all supported types if none specified
 	}
 
 	for _, packageType := range packageTypes {

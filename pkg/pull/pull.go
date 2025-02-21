@@ -14,7 +14,6 @@ import (
 	"go.uber.org/zap"
 )
 
-var SUPPORTED_PACKAGE_TYPES = []string{"container", "rubygems", "maven", "npm", "nuget"}
 var currentSpinner *pterm.SpinnerPrinter
 
 func Download(logger *zap.Logger, provider providers.Provider, report *common.Report, repository, packageType, packageName, version string, filenames []string) error {
@@ -79,9 +78,9 @@ func Pull(logger *zap.Logger) error {
 	}()
 
 	// Handle either specific package type or all package types
-	packageTypes := SUPPORTED_PACKAGE_TYPES
+	packageTypes := common.SUPPORTED_PACKAGE_TYPES
 	if desiredPackageType != "" {
-		if !utils.Contains(SUPPORTED_PACKAGE_TYPES, desiredPackageType) {
+		if !utils.Contains(common.SUPPORTED_PACKAGE_TYPES, desiredPackageType) {
 			spinner.Fail(fmt.Sprintf("Unsupported package type: %s", desiredPackageType))
 			return fmt.Errorf("unsupported package type: %s", desiredPackageType)
 		}
