@@ -181,7 +181,7 @@ func Sync(logger *zap.Logger) error {
 		return err
 	}
 	if report.PackageSuccess == 0 {
-		spinner.Fail("No packages where synced")
+		spinner.Fail("No packages were synced")
 	} else if report.PackagesFailed > 0 {
 		spinner.Warning("Sync completed with some errors, Please check the logs for more details")
 	} else {
