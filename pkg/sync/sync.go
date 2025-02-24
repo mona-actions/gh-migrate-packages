@@ -180,8 +180,13 @@ func Sync(logger *zap.Logger) error {
 		spinner.Fail(fmt.Sprintf("Error syncing package: %v", err))
 		return err
 	}
-
-	spinner.Success("Sync completed")
+	if report.PackageSuccess == 0 {
+		spinner.Fail("No packages where synced")
+	} else if report.PackagesFailed > 0 {
+		spinner.Warning("Sync completed with some errors, Please check the logs for more details")
+	} else {
+		spinner.Success("Sync completed")
+	}
 
 	// Calculate duration
 	duration := time.Since(startTime)
