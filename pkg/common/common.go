@@ -1,6 +1,8 @@
 package common
 
 import (
+	"fmt"
+
 	"github.com/mona-actions/gh-migrate-packages/internal/api"
 	"github.com/mona-actions/gh-migrate-packages/internal/providers"
 	"github.com/mona-actions/gh-migrate-packages/internal/utils"
@@ -130,19 +132,19 @@ func ProcessPackages(logger *zap.Logger, packages [][]string, fn ProcessCallback
 			if err != nil {
 				logger.Error("Error creating provider", zap.Error(err))
 				report.IncPackages(providers.Failed)
-				continue // Skip this package type but continue with others
+				return report, err
 			}
 
 			if provider == nil {
 				logger.Error("Provider is nil")
 				report.IncPackages(providers.Failed)
-				continue // Skip this package type but continue with others
+				return report, fmt.Errorf("provider is nil")
 			}
 
 			if err = provider.Connect(logger); err != nil {
 				logger.Error("Error connecting to provider", zap.Error(err))
 				report.IncPackages(providers.Failed)
-				continue // Skip this package type but continue with others
+				return report, err
 			}
 		}
 
@@ -152,7 +154,7 @@ func ProcessPackages(logger *zap.Logger, packages [][]string, fn ProcessCallback
 			if err != nil {
 				logger.Error("Error checking if package exists", zap.Error(err))
 				report.IncPackages(providers.Failed)
-				continue // Skip this package but continue with others
+				return report, err
 			}
 
 			if exists {

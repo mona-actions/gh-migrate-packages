@@ -45,7 +45,7 @@ func Upload(logger *zap.Logger, provider providers.Provider, report *common.Repo
 	pterm.Info.Println(fmt.Sprintf("🗃️ version: %s", version))
 	pterm.Info.Println(fmt.Sprintf("📦 type: %s", packageType))
 	if repository != "" {
-		pterm.Info.Println(fmt.Sprintf("📂 repository: %s", repository))	
+		pterm.Info.Println(fmt.Sprintf("📂 repository: %s", repository))
 	} else {
 		pterm.Info.Println("📂 repository: (n/a, org scoped)")
 	}
@@ -64,7 +64,6 @@ func Upload(logger *zap.Logger, provider providers.Provider, report *common.Repo
 		}
 		return nil
 	}
-
 
 	// Regular sequential upload for other package types
 	var err error

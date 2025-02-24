@@ -146,14 +146,12 @@ func (p *ContainerProvider) FetchPackageFiles(logger *zap.Logger, owner, reposit
 
 // Download pulls a container image from the source registry and saves it locally.
 func (p *ContainerProvider) Download(logger *zap.Logger, owner, repository, packageType, packageName, version, filename string) (ResultState, error) {
+	// Normalize names for container images
+	owner, repository, packageName = p.normalizeNames(owner, repository, packageName)
+
 	parts := strings.Split(filename, ":")
 	tag := parts[1]
 	downloadedFilename := fmt.Sprintf("%s-%s.tar", packageName, tag)
-
-	//lowercase owner, repository and packageName to avoid issues with docker
-	owner = strings.ToLower(owner)
-	repository = strings.ToLower(repository)
-	packageName = strings.ToLower(packageName)
 
 	return p.downloadPackage(
 		logger, owner, repository, packageType, packageName, version, filename, &downloadedFilename,
@@ -292,6 +290,9 @@ func (p *ContainerProvider) Rename(logger *zap.Logger, owner, repository, packag
 
 // Upload pushes a container image to the target registry.
 func (p *ContainerProvider) Upload(logger *zap.Logger, owner, repository, packageType, packageName, version, filename string) (ResultState, error) {
+	// Normalize names for container images
+	owner, repository, packageName = p.normalizeNames(owner, repository, packageName)
+
 	return p.uploadPackage(
 		logger, owner, repository, packageType, packageName, version, filename,
 		func() (string, error) {
@@ -341,6 +342,9 @@ func (p *ContainerProvider) GetFetchUrl(logger *zap.Logger, owner, packageName, 
 
 // GetDownloadUrl generates the URL for downloading a container image from the source registry.
 func (p *ContainerProvider) GetDownloadUrl(logger *zap.Logger, owner, repository, packageName, version, filename string) (string, error) {
+	// Normalize names for container images
+	owner, repository, packageName = p.normalizeNames(owner, repository, packageName)
+
 	downloadUrl := *p.SourceRegistryUrl
 	downloadUrl.Path = path.Join(downloadUrl.Path, owner, filename)
 	return downloadUrl.String(), nil
@@ -348,6 +352,9 @@ func (p *ContainerProvider) GetDownloadUrl(logger *zap.Logger, owner, repository
 
 // GetUploadUrl generates the URL for uploading a container image to the target registry.
 func (p *ContainerProvider) GetUploadUrl(logger *zap.Logger, owner, repository, packageName, version, filename string) (string, error) {
+	// Normalize names for container images
+	owner, repository, packageName = p.normalizeNames(owner, repository, packageName)
+
 	uploadUrl := *p.TargetRegistryUrl
 	uploadUrl.Path = path.Join(uploadUrl.Path, owner, filename)
 	return uploadUrl.String(), nil
@@ -359,4 +366,12 @@ func (p *ContainerProvider) GetUploadUrl(logger *zap.Logger, owner, repository, 
 // Export implements the Provider interface Export method.
 func (p *ContainerProvider) Export(logger *zap.Logger, owner string, content interface{}) error {
 	return p.BaseProvider.Export(logger, owner, content)
+}
+
+// Add these methods near the top of the ContainerProvider struct methods
+
+func (p *ContainerProvider) normalizeNames(owner, repository, packageName string) (string, string, string) {
+	return strings.ToLower(owner),
+		strings.ToLower(repository),
+		strings.ToLower(packageName)
 }
