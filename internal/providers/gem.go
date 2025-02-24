@@ -64,6 +64,11 @@ func (p *RubyGemsProvider) Download(logger *zap.Logger, owner, repository, packa
 }
 
 func (p *RubyGemsProvider) Rename(logger *zap.Logger, repository, filename string) error {
+	// Skip if source and target organizations are the same
+	if p.CheckOrganizationsMatch(logger) {
+		return nil
+	}
+
 	// Replace the organization name in the content
 	sourceHostname := utils.ParseUrl(viper.GetString("GHMPKG_SOURCE_HOSTNAME"))
 	targetHostname := utils.ParseUrl(viper.GetString("GHMPKG_TARGET_HOSTNAME"))

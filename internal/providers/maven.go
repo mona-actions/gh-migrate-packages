@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/google/go-github/v62/github"
@@ -91,8 +93,55 @@ func (p *MavenProvider) Download(logger *zap.Logger, owner, repository, packageT
 	)
 }
 
+// Rename processes Maven-specific files to update organization references
+func (p *MavenProvider) Rename(logger *zap.Logger, repository, packageName, version, filename string) error {
+	// Skip if source and target organizations are the same
+	if p.CheckOrganizationsMatch(logger) {
+		return nil
+	}
+
+	// Check if the file is a pom.xml or any .pom file
+	if !strings.HasSuffix(filename, "pom.xml") && !strings.HasSuffix(filename, ".pom") {
+		logger.Debug("File is not a pom file, skipping",
+			zap.String("filename", filename))
+		return nil
+	}
+
+	// Read the file content
+	content, err := os.ReadFile(filename)
+	if err != nil {
+		logger.Warn("Failed to read pom file",
+			zap.String("filename", filename),
+			zap.Error(err))
+		return nil // Continue with warning
+	}
+
+	// Create the search and replace strings
+	sourceUrl := fmt.Sprintf("https://maven.pkg.github.com/%s/packages", viper.GetString("GHMPKG_SOURCE_ORGANIZATION"))
+	targetUrl := fmt.Sprintf("https://maven.pkg.github.com/%s/packages", viper.GetString("GHMPKG_TARGET_ORGANIZATION"))
+
+	// Replace the content
+	newContent := strings.ReplaceAll(string(content), sourceUrl, targetUrl)
+
+	// Write the file back
+	if err := os.WriteFile(filename, []byte(newContent), 0644); err != nil {
+		logger.Warn("Failed to write updated pom file",
+			zap.String("filename", filename),
+			zap.Error(err))
+		return nil // Continue with warning
+	}
+
+	logger.Info("Successfully updated organization reference in file",
+		zap.String("filename", filename),
+		zap.String("sourceOrg", viper.GetString("GHMPKG_SOURCE_ORGANIZATION")),
+		zap.String("targetOrg", viper.GetString("GHMPKG_TARGET_ORGANIZATION")))
+
+	return nil
+}
+
 // Upload sends a Maven artifact to the target registry
 func (p *MavenProvider) Upload(logger *zap.Logger, owner, repository, packageType, packageName, version, filename string) (ResultState, error) {
+
 	// Create a semaphore with size 5 to limit concurrent uploads
 	const maxConcurrent = 5
 	sem := make(chan struct{}, maxConcurrent)
@@ -119,6 +168,11 @@ func (p *MavenProvider) Upload(logger *zap.Logger, owner, repository, packageTyp
 					return Failed, err
 				}
 				logger.Info("Uploading file", zap.String("url", uploadPackageUrl))
+
+				if err := p.Rename(logger, repository, packageName, version, inputPath); err != nil {
+					logger.Error("Failed to execute rename operation", zap.Error(err))
+					// Continue with upload even if rename fails
+				}
 
 				response, err := utils.UploadFile(uploadPackageUrl, inputPath, viper.GetString("GHMPKG_TARGET_TOKEN"))
 				if err != nil {

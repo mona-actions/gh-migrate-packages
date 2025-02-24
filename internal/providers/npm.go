@@ -173,6 +173,11 @@ func (p *NPMProvider) Download(logger *zap.Logger, owner, repository, packageTyp
 }
 
 func (p *NPMProvider) Rename(logger *zap.Logger, filename string) error {
+	// Skip if source and target organizations are the same
+	if p.CheckOrganizationsMatch(logger) {
+		return nil
+	}
+
 	// Read the file
 	content, err := os.ReadFile(filename)
 	if err != nil {

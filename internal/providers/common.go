@@ -280,3 +280,16 @@ func NewBaseProvider(packageType, sourceHostname, targetHostname string, isConta
 		TargetHostnameUrl: utils.ParseUrl(fmt.Sprintf("https://%s/", targetHostname)),
 	}
 }
+
+// CheckOrganizationsMatch checks if source and target organizations are identical
+func (p *BaseProvider) CheckOrganizationsMatch(logger *zap.Logger) bool {
+	sourceOrg := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
+	targetOrg := viper.GetString("GHMPKG_TARGET_ORGANIZATION")
+	if sourceOrg == targetOrg {
+		logger.Debug("Source and target organizations are identical",
+			zap.String("sourceOrg", sourceOrg),
+			zap.String("targetOrg", targetOrg))
+		return true
+	}
+	return false
+}

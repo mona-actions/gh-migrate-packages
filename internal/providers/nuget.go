@@ -56,6 +56,11 @@ func (p *NugetProvider) Download(logger *zap.Logger, owner, repository, packageT
 }
 
 func (p *NugetProvider) Rename(logger *zap.Logger, filename string) error {
+	// Skip if source and target organizations are the same
+	if p.CheckOrganizationsMatch(logger) {
+		return nil
+	}
+	
 	zipCmd := exec.Command("zip", "-d", filename, "_rels/.rels", "\\[Content_Types\\].xml")
 	if err := zipCmd.Run(); err != nil {
 		if err.Error() == "exit status 12" {
