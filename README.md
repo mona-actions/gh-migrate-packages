@@ -3,16 +3,20 @@
 `gh-migrate-packages` is a [GitHub CLI](https://cli.github.com) extension to assist in the migration of packages between GitHub organizations and repositories. While GitHub Enterprise Importer handles many aspects of organization migration, there can be challenges with packages. This extension aims to fill the gaps in the existing solutions for migrating packages. Whether you are consolidating repositories in an organization or auditing packages in an existing organization, this extension can help.
 
 ## Install
-
 ```sh
 gh extension install mona-actions/gh-migrate-packages
 ```
 
-## Upgrade
+If you are are planning to migrate `containers` or `nuget` packages, you will also need to install the following tools installed.  
 
+- [Docker](https://docs.docker.com/get-docker/)
+- [.NET SDK](https://dotnet.microsoft.com/en-us/download)
+
+## Upgrade
 ```sh
 gh extension upgrade gh-migrate-packages
 ```
+
 
 ## Usage: Export
 
@@ -177,9 +181,7 @@ gh migrate-packages sync \
 ✅ Sync completed successfully!
 ```
 
-## Updating Package Metadata (`--metadata true`)
-
-The tool will automatically update the package metadata when using the `--metadata true` flag to reflect the new organization and registry URLs. The information below provides more details on how the tool handles the metadata updates.
+## Updating Package Metadata
 
 ### RubyGems
 
@@ -233,7 +235,7 @@ During the migration process, the tool will:
 
 ### NuGet
 
-When migrating NuGet packages, the tool performs some cleanup of the package metadata by removing specific files from the .nupkg archive to remove references to the source organization (`internal/providers/nuget.go`). The cleanup process is handled during the sync operation. 
+When migrating NuGet packages, the tool performs some cleanup of the package metadata by removing specific files from the .nupkg archive to remove references to the source organization (`internal/providers/nuget.go`). The cleanup process is handled during the sync operation.
 
 - `_rels/.rels`
 - `[Content_Types].xml`
@@ -295,38 +297,6 @@ mona-actions,mona-actions-docker,docker,mona-actions-docker,1.0.1,mona-actions-d
 - `delete:packages` - Required if replacing existing packages
 - `repo` - Required for private repository access
 
-## Proxy Support
-
-The tool supports proxy configuration through both command-line flags and environment variables:
-
-### Command-line flags:
-```bash
-Global Flags:
-      --http-proxy string    HTTP proxy (can also use HTTP_PROXY env var)
-      --https-proxy string   HTTPS proxy (can also use HTTPS_PROXY env var)
-      --no-proxy string      No proxy list (can also use NO_PROXY env var)
-```
-
-### Example usage with proxy:
-```bash
-gh migrate-packages pull \
-  --source-token ghp_xxxxxxxxxxxx \
-  --https-proxy https://proxy.example.com:8080
-```
-
-### Example with environment variables:
-
-```sh
-export HTTPS_PROXY=https://proxy.example.com:8080
-export NO_PROXY=github.internal.com
-export GHMPKG_TARGET_TOKEN=ghp_...
-```
-
-```sh
-gh migrate-packages export \
-    --source-organization mona-actions
-```
-
 ## Environment Variables
 
 The tool supports loading configuration from a `.env` file. This provides an alternative to command-line flags and allows you to store your configuration securely.
@@ -343,9 +313,8 @@ GHMPKG_SOURCE_TOKEN=ghp_xxx              # Source token
 GHMPKG_TARGET_ORGANIZATION=mona-emu      # Target organization name
 GHMPKG_TARGET_HOSTNAME=                  # Target hostname
 GHMPKG_TARGET_TOKEN=ghp_yyy              # Target token
-GHMPKG_METADATA=true                     # Update package metadata (true, false)
-GHMPKG_PACKAGE_TYPE=npm,docker           # Package types to export (all, docker, rubygem, maven, npm, nuget)
-GHMPKG_WORK_DIR=                         # work directory
+GHMPKG_PACKAGE_TYPE=npm                  # Package types to export (all, docker, rubygem, maven, npm, nuget)
+GHMPKG_PACKAGE_TYPE=docker
 ```
 
 2. Run the commands without flags - the tool will automatically load values from the .env file:
