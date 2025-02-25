@@ -12,6 +12,7 @@ import (
 )
 
 var SUPPORTED_PACKAGE_TYPES = []string{"container", "rubygems", "maven", "npm", "nuget"}
+
 const ARE_YOU_SURE_YOU_EXPORTED = "Are you sure you exported first? gh migrate-packages export --help"
 
 type Report struct {
@@ -106,11 +107,9 @@ type ProcessCallback func(
 	filenames []string) error
 
 func ProcessPackages(logger *zap.Logger, packages [][]string, fn ProcessCallback, skipIfExists bool) (*Report, error) {
-
 	report := NewReport()
 	desiredPackageType := viper.GetString("GHMPKG_PACKAGE_TYPE")
 	var provider providers.Provider
-	var err error
 
 	pkgs := utils.GetListOfUniqueEntries(packages, []int{0, 1, 2, 3})
 
@@ -128,28 +127,32 @@ func ProcessPackages(logger *zap.Logger, packages [][]string, fn ProcessCallback
 
 		if provider == nil || provider.GetPackageType() != packageType {
 			logger.Info("Creating provider", zap.String("packageType", packageType))
+			var err error
 			provider, err = providers.NewProvider(logger, packageType)
 			if err != nil {
 				logger.Error("Error creating provider", zap.Error(err))
+				report.IncPackages(providers.Failed)
 				return report, err
 			}
 
 			if provider == nil {
 				logger.Error("Provider is nil")
+				report.IncPackages(providers.Failed)
 				return report, fmt.Errorf("provider is nil")
 			}
 
 			if err = provider.Connect(logger); err != nil {
 				logger.Error("Error connecting to provider", zap.Error(err))
+				report.IncPackages(providers.Failed)
 				return report, err
 			}
-
 		}
 
 		// Only check on upload
 		if skipIfExists {
 			exists, err := api.PackageExists(packageName, packageType)
 			if err != nil {
+				logger.Error("Error checking if package exists", zap.Error(err))
 				report.IncPackages(providers.Failed)
 				return report, err
 			}
@@ -186,6 +189,15 @@ func ProcessPackages(logger *zap.Logger, packages [][]string, fn ProcessCallback
 			filesSkipped := report.FilesSkipped
 			filesFailed := report.FilesFailed
 			err := fn(logger, provider, report, repository, packageType, packageName, version, filenames)
+			if err != nil {
+				logger.Error("Error processing version",
+					zap.String("package", packageName),
+					zap.String("version", version),
+					zap.Error(err))
+				report.IncVersions(providers.Failed)
+				continue // Skip this version but continue with others
+			}
+
 			if report.FilesFailed > filesFailed {
 				report.IncVersions(providers.Failed)
 			} else if report.FilesSkipped > filesSkipped {
@@ -193,10 +205,9 @@ func ProcessPackages(logger *zap.Logger, packages [][]string, fn ProcessCallback
 			} else {
 				report.IncVersions(providers.Success)
 			}
-			if err != nil {
-				return report, err
-			}
 		}
+
+		// Determine package status based on version results
 		if report.VersionsFailed > versionsFailed {
 			report.IncPackages(providers.Failed)
 		} else if report.VersionsSkipped > versionsSkipped {

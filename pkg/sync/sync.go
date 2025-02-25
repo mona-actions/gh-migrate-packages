@@ -45,7 +45,7 @@ func Upload(logger *zap.Logger, provider providers.Provider, report *common.Repo
 	pterm.Info.Println(fmt.Sprintf("🗃️ version: %s", version))
 	pterm.Info.Println(fmt.Sprintf("📦 type: %s", packageType))
 	if repository != "" {
-		pterm.Info.Println(fmt.Sprintf("📂 repository: %s", repository))	
+		pterm.Info.Println(fmt.Sprintf("📂 repository: %s", repository))
 	} else {
 		pterm.Info.Println("📂 repository: (n/a, org scoped)")
 	}
@@ -64,7 +64,6 @@ func Upload(logger *zap.Logger, provider providers.Provider, report *common.Repo
 		}
 		return nil
 	}
-
 
 	// Regular sequential upload for other package types
 	var err error
@@ -181,8 +180,13 @@ func Sync(logger *zap.Logger) error {
 		spinner.Fail(fmt.Sprintf("Error syncing package: %v", err))
 		return err
 	}
-
-	spinner.Success("Sync completed")
+	if report.PackageSuccess == 0 {
+		spinner.Fail("No packages were synced")
+	} else if report.PackagesFailed > 0 {
+		spinner.Warning("Sync completed with some errors, Please check the logs for more details")
+	} else {
+		spinner.Success("Sync completed")
+	}
 
 	// Calculate duration
 	duration := time.Since(startTime)

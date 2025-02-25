@@ -104,23 +104,25 @@ func (p *ContainerProvider) Connect(logger *zap.Logger) error {
 	p.ctx = ctx
 	p.client = client
 
-	sourceOrg = viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
-	sourceToken = viper.GetString("GHMPKG_SOURCE_TOKEN")
-	sourceAuthStr, err := p.login(logger, p.SourceRegistryUrl.String(), sourceOrg, sourceToken)
-	if err != nil {
-		logger.Error("Failed to login to source registry", zap.Error(err))
-		return err
+	if sourceOrg != "" && sourceToken != "" {
+		sourceAuthStr, err := p.login(logger, p.SourceRegistryUrl.String(), sourceOrg, sourceToken)
+		if err != nil {
+			logger.Error("Failed to login to source registry", zap.Error(err))
+			return err
+		}
+		p.sourceAuthStr = sourceAuthStr
 	}
-	p.sourceAuthStr = sourceAuthStr
 
 	targetOrg := viper.GetString("GHMPKG_TARGET_ORGANIZATION")
 	targetToken := viper.GetString("GHMPKG_TARGET_TOKEN")
-	targetAuthStr, err := p.login(logger, p.TargetRegistryUrl.String(), targetOrg, targetToken)
-	if err != nil {
-		logger.Error("Failed to login to target registry", zap.Error(err))
-		return err
+	if targetOrg != "" && targetToken != "" { //if targetOrg and token are empty, we don't need to login
+		targetAuthStr, err := p.login(logger, p.TargetRegistryUrl.String(), targetOrg, targetToken)
+		if err != nil {
+			logger.Error("Failed to login to target registry", zap.Error(err))
+			return err
+		}
+		p.targetAuthStr = targetAuthStr
 	}
-	p.targetAuthStr = targetAuthStr
 
 	return nil
 }
@@ -144,9 +146,13 @@ func (p *ContainerProvider) FetchPackageFiles(logger *zap.Logger, owner, reposit
 
 // Download pulls a container image from the source registry and saves it locally.
 func (p *ContainerProvider) Download(logger *zap.Logger, owner, repository, packageType, packageName, version, filename string) (ResultState, error) {
+	// Normalize names for container images
+	owner, repository, packageName = p.normalizeNames(owner, repository, packageName)
+
 	parts := strings.Split(filename, ":")
 	tag := parts[1]
 	downloadedFilename := fmt.Sprintf("%s-%s.tar", packageName, tag)
+
 	return p.downloadPackage(
 		logger, owner, repository, packageType, packageName, version, filename, &downloadedFilename,
 		// URL generator function
@@ -159,22 +165,30 @@ func (p *ContainerProvider) Download(logger *zap.Logger, owner, repository, pack
 				RegistryAuth: p.sourceAuthStr,
 			})
 			if err != nil {
-				logger.Error("Failed to pull image", zap.Error(err))
+				logger.Error("Failed to pull image",
+					zap.String("package", packageName),
+					zap.String("version", version),
+					zap.String("image", downloadUrl),
+					zap.Error(err))
 				return Failed, err
 			}
 			defer pullResp.Close()
 
 			// Must read the response to complete the pull
-			_, err = io.Copy(io.Discard, pullResp)
-			if err != nil {
-				logger.Error("Failed to read pull response", zap.Error(err))
+			if _, err = io.Copy(io.Discard, pullResp); err != nil {
+				logger.Error("Failed to read pull response",
+					zap.String("image", downloadUrl),
+					zap.Error(err))
 				return Failed, err
 			}
 
 			// Save image to file
 			saveResp, err := p.client.ImageSave(p.ctx, []string{downloadUrl})
 			if err != nil {
-				logger.Error("Failed to save image", zap.Error(err))
+				logger.Error("Failed to save image",
+					zap.String("image", downloadUrl),
+					zap.String("output", outputPath),
+					zap.Error(err))
 				return Failed, err
 			}
 			defer saveResp.Close()
@@ -182,15 +196,19 @@ func (p *ContainerProvider) Download(logger *zap.Logger, owner, repository, pack
 			// Create output file
 			outputFile, err := os.Create(outputPath)
 			if err != nil {
-				logger.Error("Failed to create output file", zap.Error(err))
+				logger.Error("Failed to create output file",
+					zap.String("path", outputPath),
+					zap.Error(err))
 				return Failed, err
 			}
 			defer outputFile.Close()
 
 			// Copy image to file
-			_, err = io.Copy(outputFile, saveResp)
-			if err != nil {
-				logger.Error("Failed to write image to file", zap.Error(err))
+			if _, err = io.Copy(outputFile, saveResp); err != nil {
+				logger.Error("Failed to write image to file",
+					zap.String("path", outputPath),
+					zap.String("image", downloadUrl),
+					zap.Error(err))
 				return Failed, err
 			}
 			return Success, nil
@@ -277,6 +295,9 @@ func (p *ContainerProvider) Rename(logger *zap.Logger, owner, repository, packag
 
 // Upload pushes a container image to the target registry.
 func (p *ContainerProvider) Upload(logger *zap.Logger, owner, repository, packageType, packageName, version, filename string) (ResultState, error) {
+	// Normalize names for container images
+	owner, repository, packageName = p.normalizeNames(owner, repository, packageName)
+
 	return p.uploadPackage(
 		logger, owner, repository, packageType, packageName, version, filename,
 		func() (string, error) {
@@ -326,6 +347,9 @@ func (p *ContainerProvider) GetFetchUrl(logger *zap.Logger, owner, packageName, 
 
 // GetDownloadUrl generates the URL for downloading a container image from the source registry.
 func (p *ContainerProvider) GetDownloadUrl(logger *zap.Logger, owner, repository, packageName, version, filename string) (string, error) {
+	// Normalize names for container images
+	owner, repository, packageName = p.normalizeNames(owner, repository, packageName)
+
 	downloadUrl := *p.SourceRegistryUrl
 	downloadUrl.Path = path.Join(downloadUrl.Path, owner, filename)
 	return downloadUrl.String(), nil
@@ -333,6 +357,9 @@ func (p *ContainerProvider) GetDownloadUrl(logger *zap.Logger, owner, repository
 
 // GetUploadUrl generates the URL for uploading a container image to the target registry.
 func (p *ContainerProvider) GetUploadUrl(logger *zap.Logger, owner, repository, packageName, version, filename string) (string, error) {
+	// Normalize names for container images
+	owner, repository, packageName = p.normalizeNames(owner, repository, packageName)
+
 	uploadUrl := *p.TargetRegistryUrl
 	uploadUrl.Path = path.Join(uploadUrl.Path, owner, filename)
 	return uploadUrl.String(), nil
@@ -344,4 +371,12 @@ func (p *ContainerProvider) GetUploadUrl(logger *zap.Logger, owner, repository, 
 // Export implements the Provider interface Export method.
 func (p *ContainerProvider) Export(logger *zap.Logger, owner string, content interface{}) error {
 	return p.BaseProvider.Export(logger, owner, content)
+}
+
+// Add these methods near the top of the ContainerProvider struct methods
+
+func (p *ContainerProvider) normalizeNames(owner, repository, packageName string) (string, string, string) {
+	return strings.ToLower(owner),
+		strings.ToLower(repository),
+		strings.ToLower(packageName)
 }

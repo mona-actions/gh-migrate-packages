@@ -16,7 +16,6 @@ import (
 )
 
 // var SUPPORTED_PACKAGE_TYPES = []string{"maven", "npm", "container", "rubygems", "nuget"}
-var SUPPORTED_PACKAGE_TYPES = []string{"maven", "npm", "container", "rubygems", "nuget"}
 
 func Export(logger *zap.Logger) error {
 	startTime := time.Now()
@@ -44,7 +43,7 @@ func Export(logger *zap.Logger) error {
 		// Validate each desired package type against supported types
 		for _, desired := range desiredPackageTypes {
 			isSupported := false
-			for _, supported := range SUPPORTED_PACKAGE_TYPES {
+			for _, supported := range common.SUPPORTED_PACKAGE_TYPES {
 				if desired == supported {
 					isSupported = true
 					packageTypes = append(packageTypes, desired)
@@ -57,7 +56,7 @@ func Export(logger *zap.Logger) error {
 			}
 		}
 	} else {
-		packageTypes = SUPPORTED_PACKAGE_TYPES
+		packageTypes = common.SUPPORTED_PACKAGE_TYPES // Use all supported types if none specified
 		pterm.Info.Println("📦 Exporting all supported package types")
 	}
 
@@ -91,6 +90,7 @@ func Export(logger *zap.Logger) error {
 			pterm.Info.Printf("  package %d/%d: %s\n", i+1, len(packages), pkg.GetName())
 
 			versions, err := api.FetchPackageVersions(pkg)
+			spinner.UpdateText(fmt.Sprintf("Exporting %s package(%s) from %s/%s", pkg.GetName(), packageType, owner, pkg.Repository.GetName()))
 			if err != nil {
 				spinner.Fail(fmt.Sprintf("❌ Error getting versions: %v", err))
 				return err
@@ -154,7 +154,7 @@ func Export(logger *zap.Logger) error {
 	fmt.Printf("✅ Successfully processed: %d packages\n", report.GetPackages(providers.Success))
 
 	// Print package type breakdown
-	for _, pkgType := range SUPPORTED_PACKAGE_TYPES {
+	for _, pkgType := range common.SUPPORTED_PACKAGE_TYPES {
 		if count, exists := packageStats[pkgType]; exists && count > 0 {
 			emoji := "📦"
 			name := pkgType
