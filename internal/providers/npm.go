@@ -74,28 +74,6 @@ type NPMProvider struct {
 	BaseProvider
 }
 
-// func NewNPMProvider(logger *zap.Logger, packageType string) Provider {
-// 	sourceHostname := viper.GetString("GHMPKG_SOURCE_HOSTNAME")
-// 	if sourceHostname == "" {
-// 		sourceHostname = "github.com"
-// 	}
-
-// 	targetHostname := viper.GetString("GHMPKG_TARGET_HOSTNAME")
-// 	if targetHostname == "" {
-// 		targetHostname = "github.com"
-// 	}
-
-// 	return &NPMProvider{
-// 		BaseProvider: BaseProvider{
-// 			PackageType:       packageType,
-// 			SourceRegistryUrl: utils.ParseUrl(fmt.Sprintf("https://%s.pkg.%s/", packageType, sourceHostname)),
-// 			TargetRegistryUrl: utils.ParseUrl(fmt.Sprintf("https://%s.pkg.%s/", packageType, targetHostname)),
-// 			SourceHostnameUrl: utils.ParseUrl(fmt.Sprintf("https://%s/", sourceHostname)),
-// 			TargetHostnameUrl: utils.ParseUrl(fmt.Sprintf("https://%s/", targetHostname)),
-// 		},
-// 	}
-// }
-
 func NewNPMProvider(logger *zap.Logger, packageType string) Provider {
 	return &NPMProvider{
 		BaseProvider: NewBaseProvider(packageType, "", "", false),
@@ -184,10 +162,19 @@ func (p *NPMProvider) Rename(logger *zap.Logger, filename string) error {
 		return fmt.Errorf("failed to read package.json: %w", err)
 	}
 
-	// Replace the organization name in the content
-	oldScope := fmt.Sprintf("@%s/", viper.GetString("GHMPKG_SOURCE_ORGANIZATION"))
-	newScope := fmt.Sprintf("@%s/", viper.GetString("GHMPKG_TARGET_ORGANIZATION"))
+	sourceOrg := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
+	targetOrg := viper.GetString("GHMPKG_TARGET_ORGANIZATION")
+
+	// Replace the organization name in the content, @sourceOrg -> @targetOrg
+	oldScope := fmt.Sprintf("@%s/", sourceOrg)
+	newScope := fmt.Sprintf("@%s/", targetOrg)
 	newContent := strings.Replace(string(content), oldScope, newScope, -1)
+
+	// Replace the repository url in the content
+	// todo: we do not support GHES yet
+	oldRepoUrl := fmt.Sprintf("https://github.com/%s/", sourceOrg)
+	newRepoUrl := fmt.Sprintf("https://github.com/%s/", targetOrg)
+	newContent = strings.Replace(newContent, oldRepoUrl, newRepoUrl, -1)
 
 	// Write back to file
 	err = os.WriteFile(filename, []byte(newContent), 0644)

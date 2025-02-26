@@ -1,29 +1,3 @@
-// package cmd
-
-// import (
-// 	"github.com/mona-actions/gh-migrate-packages/pkg/sync"
-// 	"github.com/spf13/cobra"
-// 	"go.uber.org/zap"
-// )
-
-// // syncCmd represents the export command
-// var syncCmd = &cobra.Command{
-// 	Use:   "sync",
-// 	Short: "Uploads the source organization's packages",
-// 	Long:  "Uploads the source organization's packages",
-// 	Run: func(cmd *cobra.Command, args []string) {
-// 		logger := zap.L()
-// 		if err := sync.Sync(logger); err != nil {
-// 			logger.Error("Error syncing packages", zap.Error(err))
-// 			panic(err)
-// 		}
-// 	},
-// }
-
-// func init() {
-// 	rootCmd.AddCommand(syncCmd)
-// }
-
 package cmd
 
 import (
@@ -55,11 +29,13 @@ var syncCmd = &cobra.Command{
 }
 
 func init() {
-	syncCmd.Flags().StringP("target-hostname", "n", "", "GitHub Enterprise Server hostname URL (optional)")
+	//syncCmd.Flags().StringP("target-hostname", "n", "", "GitHub Enterprise Server hostname URL (optional)")
+	syncCmd.Flags().StringP("source-organization", "o", "", "Organization (required)")
 	syncCmd.Flags().StringP("target-organization", "o", "", "Organization (required)")
 	syncCmd.Flags().StringP("target-token", "t", "", "GitHub token (required)")
 
-	viper.BindPFlag("GHMPKG_TARGET_HOSTNAME", syncCmd.Flags().Lookup("target-hostname"))
+	//viper.BindPFlag("GHMPKG_TARGET_HOSTNAME", syncCmd.Flags().Lookup("target-hostname"))
+	viper.BindPFlag("GHMPKG_SOURCE_ORGANIZATION", syncCmd.Flags().Lookup("source-organization"))
 	viper.BindPFlag("GHMPKG_TARGET_ORGANIZATION", syncCmd.Flags().Lookup("target-organization"))
 	viper.BindPFlag("GHMPKG_TARGET_TOKEN", syncCmd.Flags().Lookup("target-token"))
 }
