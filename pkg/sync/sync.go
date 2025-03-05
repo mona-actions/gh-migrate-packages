@@ -24,9 +24,8 @@ func checkPath(logger *zap.Logger) {
 		installCmd.Stdout = os.Stdout
 		installCmd.Stderr = os.Stderr
 		if err := installCmd.Run(); err != nil {
-			fmt.Println("Error installing gpr tool")
-			logger.Error("Error installing gpr tool", zap.Error(err))
-			panic(err)
+			fmt.Println("Error installing gpr tool for nuget packages migration")
+			logger.Error("Error installing gpr tool for nuget packages migration", zap.Error(err))
 		}
 	}
 }
