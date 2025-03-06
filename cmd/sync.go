@@ -31,7 +31,7 @@ var syncCmd = &cobra.Command{
 func init() {
 	//syncCmd.Flags().StringP("target-hostname", "n", "", "GitHub Enterprise Server hostname URL (optional)")
 	syncCmd.Flags().StringP("source-organization", "o", "", "Organization (required)")
-	syncCmd.Flags().StringP("target-organization", "o", "", "Organization (required)")
+	syncCmd.Flags().StringP("target-organization", "p", "", "Organization (required)")
 	syncCmd.Flags().StringP("target-token", "t", "", "GitHub token (required)")
 
 	//viper.BindPFlag("GHMPKG_TARGET_HOSTNAME", syncCmd.Flags().Lookup("target-hostname"))
