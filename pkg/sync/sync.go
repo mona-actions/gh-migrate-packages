@@ -91,6 +91,10 @@ func Sync(logger *zap.Logger) error {
 	owner := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
 	targetOwner := viper.GetString("GHMPKG_TARGET_ORGANIZATION")
 	desiredPackageType := viper.GetString("GHMPKG_PACKAGE_TYPE")
+	migrationPath := viper.GetString("GHMPKG_MIGRATION_PATH")
+	if migrationPath == "" {
+		migrationPath = "./migration-packages"
+	}
 
 	pterm.Info.Println("Starting sync process...")
 	spinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Syncing packages to target org: %s", targetOwner))
@@ -110,7 +114,7 @@ func Sync(logger *zap.Logger) error {
 	for _, pkgType := range packageTypes {
 		logger.Info("Processing package type", zap.String("type", pkgType))
 		pterm.Info.Println(fmt.Sprintf("Processing %s packages...", pkgType))
-		pkgTypeDir := fmt.Sprintf("./migration-packages/export/%s", pkgType)
+		pkgTypeDir := fmt.Sprintf("%s/export/%s", migrationPath, pkgType)
 		if _, err := os.Stat(pkgTypeDir); os.IsNotExist(err) {
 			logger.Warn("Package type directory not found",
 				zap.String("packageType", pkgType),
@@ -118,13 +122,13 @@ func Sync(logger *zap.Logger) error {
 			continue
 		}
 
-		pattern := fmt.Sprintf("./migration-packages/export/%s/*_%s_%s_packages.csv", desiredPackageType, owner, desiredPackageType)
+		pattern := fmt.Sprintf("%s/export/%s/*_%s_%s_packages.csv", migrationPath, desiredPackageType, owner, desiredPackageType)
 		logger.Info("Searching for CSV with pattern", zap.String("pattern", pattern))
 
 		matches, err := utils.FindMostRecentFile(pattern)
 		if err != nil {
 			// Try alternate pattern without owner in filename
-			altPattern := fmt.Sprintf("./migration-packages/export/%s/*_%s_packages.csv", pkgType, pkgType)
+			altPattern := fmt.Sprintf("%s/export/%s/*_%s_packages.csv", migrationPath, pkgType, pkgType)
 			logger.Info("Trying alternate pattern",
 				zap.String("altPattern", altPattern))
 

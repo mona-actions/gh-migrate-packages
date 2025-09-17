@@ -88,10 +88,6 @@ func (p *ContainerProvider) Connect(logger *zap.Logger) error {
 	sourceOrg := viper.GetString("GHMPKG_SOURCE_ORGANIZATION")
 	sourceToken := viper.GetString("GHMPKG_SOURCE_TOKEN")
 
-	if sourceOrg == "" || sourceToken == "" {
-		return fmt.Errorf("missing required environment variables: GHMPKG_SOURCE_ORGANIZATION and/or GHMPKG_SOURCE_TOKEN")
-	}
-
 	ctx := context.Background()
 
 	// Create Docker client
