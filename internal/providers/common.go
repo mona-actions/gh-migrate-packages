@@ -171,7 +171,11 @@ func (p *BaseProvider) downloadPackage(
 	if downloadedFilename == nil {
 		downloadedFilename = &filename
 	}
-	outputPath := filepath.Join("migration-packages", "packages", owner, packageType, packageName, version, *downloadedFilename)
+	migrationPath := viper.GetString("GHMPKG_MIGRATION_PATH")
+	if migrationPath == "" {
+		migrationPath = "./migration-packages"
+	}
+	outputPath := filepath.Join(migrationPath, "packages", owner, packageType, packageName, version, *downloadedFilename)
 
 	if utils.FileExists(outputPath) {
 		logger.Warn("File already exists", zap.String("outputPath", outputPath))
@@ -219,13 +223,17 @@ func (p *BaseProvider) uploadPackage(
 	getUrl func() (string, error),
 	upload func(string, string) (ResultState, error),
 ) (ResultState, error) {
+migrationPath := viper.GetString("GHMPKG_MIGRATION_PATH")
+	if migrationPath == "" {
+		migrationPath = "./migration-packages"
+	}
 	var packageDir string
 	if packageType == "container" {
 		parts := strings.Split(filename, ":")
 		tag := parts[1]
-		packageDir = filepath.Join("migration-packages", "packages", viper.GetString("GHMPKG_SOURCE_ORGANIZATION"), packageType, packageName, tag)
+		packageDir = filepath.Join(migrationPath, "packages", viper.GetString("GHMPKG_SOURCE_ORGANIZATION"), packageType, packageName, tag)
 	} else {
-		packageDir = filepath.Join("migration-packages", "packages", viper.GetString("GHMPKG_SOURCE_ORGANIZATION"), packageType, packageName, version)
+		packageDir = filepath.Join(migrationPath, "packages", viper.GetString("GHMPKG_SOURCE_ORGANIZATION"), packageType, packageName, version)
 	}
 
 	if !utils.FileExists(packageDir) {

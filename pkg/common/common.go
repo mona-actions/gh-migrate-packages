@@ -125,6 +125,16 @@ func ProcessPackages(logger *zap.Logger, packages [][]string, fn ProcessCallback
 			continue
 		}
 
+		// Filter by repository if specified
+		desiredRepository := viper.GetString("GHMPKG_REPOSITORY")
+		if desiredRepository != "" && repository != desiredRepository {
+			logger.Info("Skipping package due to repository filter",
+				zap.String("repository", repository),
+				zap.String("desiredRepository", desiredRepository),
+				zap.String("packageName", packageName))
+			continue
+		}
+
 		if provider == nil || provider.GetPackageType() != packageType {
 			logger.Info("Creating provider", zap.String("packageType", packageType))
 			var err error
