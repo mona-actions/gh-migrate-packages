@@ -153,15 +153,40 @@ Usage:
 
 Flags:
   -h, --help                         help for sync
-  -u, --target-hostname string       GitHub Enterprise source hostname url (optional)
-  -t, --target-organization string   Target Organization to sync releases from
-  -b, --target-token string          Target Organization GitHub token. Scopes: admin:org
+  -o, --source-organization string   Source Organization name (required)
+  -p, --target-organization string   Target Organization to sync packages to (required)
+  -t, --target-token string          Target Organization GitHub token. Scopes: admin:org (required)
+  -m, --migration-path string        Path to the migration directory (default: ./migration-packages)
+  -r, --repository string            Repository to sync (optional, syncs all repositories if not specified)
 ```
+
+### Example Sync Command for all packages
 
 ```bash
 gh migrate-packages sync \
+  --source-organization mona-actions \
   --target-organization mona-emu \
   --target-token ghp_xxxxxxxxxxxx
+```
+
+### Example Sync Command with custom migration path
+
+```bash
+gh migrate-packages sync \
+  --source-organization mona-actions \
+  --target-organization mona-emu \
+  --target-token ghp_xxxxxxxxxxxx \
+  --migration-path /path/to/custom/migration/directory
+```
+
+### Example Sync Command for specific repository
+
+```bash
+gh migrate-packages sync \
+  --source-organization mona-actions \
+  --target-organization mona-emu \
+  --target-token ghp_xxxxxxxxxxxx \
+  --repository my-specific-repo
 ```
 
 ### Sync summary
@@ -315,6 +340,8 @@ GHMPKG_TARGET_HOSTNAME=                  # Target hostname
 GHMPKG_TARGET_TOKEN=ghp_yyy              # Target token
 GHMPKG_PACKAGE_TYPE=npm                  # Package types to export (all, docker, rubygem, maven, npm, nuget)
 GHMPKG_PACKAGE_TYPE=docker
+GHMPKG_MIGRATION_PATH=./my-migration     # Custom migration directory path (default: ./migration-packages)
+GHMPKG_REPOSITORY=my-specific-repo       # Specific repository to sync (optional)
 ```
 
 2. Run the commands without flags - the tool will automatically load values from the .env file:
