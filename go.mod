@@ -1,6 +1,6 @@
 module github.com/mona-actions/gh-migrate-packages
 
-go 1.23
+go 1.23.0
 
 toolchain go1.23.4
 
@@ -12,7 +12,7 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/oauth2 v0.26.0
+	golang.org/x/oauth2 v0.27.0
 )
 
 require (
