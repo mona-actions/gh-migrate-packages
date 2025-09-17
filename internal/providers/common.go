@@ -223,7 +223,7 @@ func (p *BaseProvider) uploadPackage(
 	getUrl func() (string, error),
 	upload func(string, string) (ResultState, error),
 ) (ResultState, error) {
-migrationPath := viper.GetString("GHMPKG_MIGRATION_PATH")
+	migrationPath := viper.GetString("GHMPKG_MIGRATION_PATH")
 	if migrationPath == "" {
 		migrationPath = "./migration-packages"
 	}
